@@ -1,0 +1,12 @@
+{"id": "business-gtm", "text": "What are the key components of a go-to-market strategy for a SaaS startup?", "expected_decision": "business_decision", "expected_model": "Model-A", "expected_domain": "business"}
+{"id": "business-supply-chain", "text": "Explain the principles of supply chain management in a modern manufacturing firm.", "expected_decision": "business_decision", "expected_model": "Model-A", "expected_domain": "business"}
+{"id": "cs-prime", "text": "Write a Python function to check whether a number is prime.", "expected_decision": "computer_science_decision", "expected_model": "Model-B", "expected_domain": "computer science"}
+{"id": "cs-linkedlist", "text": "Implement a singly linked list in Python with insert and delete operations.", "expected_decision": "computer_science_decision", "expected_model": "Model-B", "expected_domain": "computer science"}
+{"id": "psychology-cbt", "text": "How does cognitive behavioral therapy help manage anxiety?", "expected_decision": "psychology_decision", "expected_model": "Model-A", "expected_domain": "psychology"}
+{"id": "physics-momentum", "text": "Derive the conservation of momentum for a two-body elastic collision.", "expected_decision": "physics_decision", "expected_model": "Model-B", "expected_domain": "physics"}
+{"id": "biology-mitosis", "text": "Describe the phases of mitosis and what happens in each.", "expected_decision": "biology_decision", "expected_model": "Model-A", "expected_domain": "biology"}
+{"id": "philosophy-trolley", "text": "What does the trolley problem reveal about consequentialist versus deontological ethics?", "expected_decision": "philosophy_decision", "expected_model": "Model-A", "expected_domain": "philosophy"}
+{"id": "engineering-beam", "text": "How do you calculate the maximum bending stress in a simply supported steel beam?", "expected_decision": "engineering_decision", "expected_model": "Model-B", "expected_domain": "engineering"}
+{"id": "law-contract", "text": "What are the essential elements required for a legally binding contract?", "expected_decision": "law_decision", "expected_model": "Model-B", "expected_domain": "law"}
+{"id": "general-capital", "text": "What is the capital of France?", "expected_decision": "general_decision", "expected_model": "Model-B", "expected_domain": "other"}
+{"id": "general-recipe", "text": "Give me a simple recipe for a weeknight pasta dinner.", "expected_decision": "general_decision", "expected_model": "Model-B", "expected_domain": "other"}
