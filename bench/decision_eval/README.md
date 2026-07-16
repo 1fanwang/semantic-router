@@ -88,3 +88,15 @@ The JSON report is deterministic (`sort_keys`, no wall-clock in the graded
 fields) and records expected vs. actual decision/model, matched domains, and —
 via `--endpoint eval` — the underlying signal evidence, so it can gate adaptive
 thresholds and agentic config tuning.
+
+## Tests
+
+```bash
+python3 bench/decision_eval/test_harness.py        # or: python3 -m unittest bench.decision_eval.test_harness
+```
+
+`test_harness.py` is stdlib-only and self-contained: it starts an in-process
+mock router, so the whole client path (request → HTTP → parse → grade → report →
+exit code) is covered without a live backend. It exercises dataset loading and
+validation, grading, regression detection, both endpoint response shapes, and
+every `main()` exit code including `--fail-under` and `--baseline`.
