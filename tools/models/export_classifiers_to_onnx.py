@@ -13,8 +13,10 @@ Uses optimum for ONNX export with proper handling of ModernBERT architecture.
 """
 
 import argparse
+import hashlib
 import os
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
 import torch
@@ -26,13 +28,84 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
     PreTrainedTokenizerFast,
 )
 
 ONNX_VERIFICATION_TOLERANCE = 1e-4
+PARITY_MAX_LENGTH = 512
+
+ORTClassifier = ORTModelForSequenceClassification | ORTModelForTokenClassification
+
+# mmBERT is multilingual, so an English-only probe leaves most of the
+# embedding table and the non-Latin tokenizer paths unverified.
+SEQUENCE_PARITY_TEXTS: tuple[str, ...] = (
+    "This is a test sentence for verification.",
+    "The Eiffel Tower is located in Berlin, Germany.",
+    "Water boils at 100 degrees Celsius at sea level.",
+    "中国的首都是北京。",
+    "El sol gira alrededor de la Tierra.",
+)
+
+TOKEN_PARITY_TEXTS: tuple[str, ...] = (
+    "John Smith's email is john@example.com and SSN is 123-45-6789.",
+    "Contacte a María López al +34 600 123 456 o maria@ejemplo.es.",
+    "请将发票寄给张伟 电话 13800138000。",
+)
 
 
-def export_sequence_classifier(model_path: str, output_path: str, opset: int = 14):
+def sha256_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_parity(
+    torch_model: PreTrainedModel,
+    ort_model: ORTClassifier,
+    tokenizer: PreTrainedTokenizerBase,
+    texts: Sequence[str],
+    model_path: str,
+) -> float:
+    worst = 0.0
+    for text in texts:
+        inputs = tokenizer(
+            text,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=PARITY_MAX_LENGTH,
+        )
+        with torch.no_grad():
+            torch_logits = torch_model(**inputs).logits.numpy()
+        ort_logits = ort_model(**inputs).logits.numpy()
+        diff = float(abs(torch_logits - ort_logits).max())
+        worst = max(worst, diff)
+        print(f"  parity {diff:.3e}  {text[:44]!r}")
+
+    if worst >= ONNX_VERIFICATION_TOLERANCE:
+        raise SystemExit(
+            f"ONNX parity check failed for {model_path}: worst logit difference "
+            f"{worst:.3e} is not below {ONNX_VERIFICATION_TOLERANCE:.0e}"
+        )
+
+    print(f"  Parity OK: worst {worst:.3e} < {ONNX_VERIFICATION_TOLERANCE:.0e}")
+    return worst
+
+
+def report_artifact(output_path: str) -> None:
+    onnx_path = Path(output_path) / "model.onnx"
+    if not onnx_path.exists():
+        raise SystemExit(f"Export produced no model.onnx under {output_path}")
+    size_mb = onnx_path.stat().st_size / (1024 * 1024)
+    print(f"  ONNX model size: {size_mb:.1f} MB")
+    print(f"  ONNX sha256: {sha256_digest(onnx_path)}")
+
+
+def export_sequence_classifier(model_path: str, output_path: str) -> str:
     """Export a sequence classification model to ONNX."""
     print(f"\n{'=' * 60}")
     print(f"Exporting: {model_path}")
@@ -101,40 +174,13 @@ def export_sequence_classifier(model_path: str, output_path: str, opset: int = 1
     # Verify the exported model
     print("Verifying ONNX model...")
     ort_model_loaded = ORTModelForSequenceClassification.from_pretrained(output_path)
-
-    # Test inference
-    test_text = "This is a test sentence for verification."
-    inputs = tokenizer(
-        test_text, return_tensors="pt", padding=True, truncation=True, max_length=512
-    )
-
-    with torch.no_grad():
-        pt_outputs = model(**inputs)
-
-    ort_outputs = ort_model_loaded(**inputs)
-
-    # Compare outputs
-    pt_logits = pt_outputs.logits.numpy()
-    ort_logits = ort_outputs.logits.numpy()
-
-    diff = abs(pt_logits - ort_logits).max()
-    print(f"  Max logit difference: {diff:.6f}")
-
-    if diff < ONNX_VERIFICATION_TOLERANCE:
-        print("  ONNX model verified successfully!")
-    else:
-        print(f"  ⚠ Warning: Logit difference {diff} is larger than expected")
-
-    # Print ONNX file size
-    onnx_path = Path(output_path) / "model.onnx"
-    if onnx_path.exists():
-        size_mb = onnx_path.stat().st_size / (1024 * 1024)
-        print(f"  ONNX model size: {size_mb:.1f} MB")
+    verify_parity(model, ort_model_loaded, tokenizer, SEQUENCE_PARITY_TEXTS, model_path)
+    report_artifact(output_path)
 
     return output_path
 
 
-def export_token_classifier(model_path: str, output_path: str, opset: int = 14):
+def export_token_classifier(model_path: str, output_path: str) -> str:
     """Export a token classification model to ONNX."""
     print(f"\n{'=' * 60}")
     print(f"Exporting: {model_path}")
@@ -183,35 +229,8 @@ def export_token_classifier(model_path: str, output_path: str, opset: int = 14):
     # Verify the exported model
     print("Verifying ONNX model...")
     ort_model_loaded = ORTModelForTokenClassification.from_pretrained(output_path)
-
-    # Test inference
-    test_text = "John Smith's email is john@example.com and SSN is 123-45-6789."
-    inputs = tokenizer(
-        test_text, return_tensors="pt", padding=True, truncation=True, max_length=512
-    )
-
-    with torch.no_grad():
-        pt_outputs = model(**inputs)
-
-    ort_outputs = ort_model_loaded(**inputs)
-
-    # Compare outputs
-    pt_logits = pt_outputs.logits.numpy()
-    ort_logits = ort_outputs.logits.numpy()
-
-    diff = abs(pt_logits - ort_logits).max()
-    print(f"  Max logit difference: {diff:.6f}")
-
-    if diff < ONNX_VERIFICATION_TOLERANCE:
-        print("  ONNX model verified successfully!")
-    else:
-        print(f"  ⚠ Warning: Logit difference {diff} is larger than expected")
-
-    # Print ONNX file size
-    onnx_path = Path(output_path) / "model.onnx"
-    if onnx_path.exists():
-        size_mb = onnx_path.stat().st_size / (1024 * 1024)
-        print(f"  ONNX model size: {size_mb:.1f} MB")
+    verify_parity(model, ort_model_loaded, tokenizer, TOKEN_PARITY_TEXTS, model_path)
+    report_artifact(output_path)
 
     return output_path
 
