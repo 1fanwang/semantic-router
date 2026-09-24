@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:4ceddf8b218c047f8fab68c1377899ac06355630a1089f7e6c8beded37056f2b"
+const builtInCatalogDigest = "sha256:8a9bcd7cf58241263e3ecab85b64ef82edbec81eeb2c38312fbf5380a91ed944"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -98731,9 +98731,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "first_party",
           "verification": {
-            "source": "https://www.volcengine.com/docs/82379/1795150",
+            "source": "https://www.volcengine.com/docs/82379/1330310",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-24"
           }
         }
       ],
