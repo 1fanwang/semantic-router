@@ -11,6 +11,14 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
+	if llmprotocol.RequiredCapabilities(request).Supports(llmprotocol.CapabilityCacheDirectives) {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_cache_directive",
+			"Responses cannot encode per-block cache directives without an explicit projection",
+			nil,
+		)
+	}
 	if err := validateResponsesEncodableRequest(request); err != nil {
 		return nil, nil, err
 	}

@@ -18,15 +18,24 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackend(
 	model string,
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, error) {
+	projected, _, err := r.projectAnthropicRequestForBackendWithDiagnostics(request, model, target)
+	return projected, err
+}
+
+func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
+	request llmprotocol.Request,
+	model string,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
 	if request.Trusted.SourceFormat != llmprotocol.AnthropicMessagesV1 ||
 		(target != llmprotocol.OpenAIChatV1 && target != llmprotocol.OpenAIResponsesV1) {
-		return request, nil
+		return request, nil, nil
 	}
 	projected := request
 	changed := false
 	if len(request.ContextManagement) > 0 {
 		if !noopAnthropicContextManagement(request.ContextManagement) {
-			return request, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation",
+			return request, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation",
 				"the selected backend cannot apply Anthropic context_management edits", nil)
 		}
 		projected.ContextManagement = nil
@@ -42,7 +51,7 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackend(
 		// A generic Chat or Responses endpoint has no portable off switch.
 		// Its configured family must provide a provider-specific one.
 		if !anthropicBackendCanDisableReasoning(r.getModelReasoningFamily(model)) {
-			return request, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			return request, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
 				fmt.Sprintf("model %q has no configured reasoning-off control", model), nil)
 		}
 		projected.ReasoningMode = ""
@@ -50,7 +59,7 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackend(
 	}
 	if request.ReasoningDisplay != "" {
 		if request.ReasoningDisplay != "omitted" {
-			return request, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_reasoning_display",
+			return request, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_reasoning_display",
 				"the selected backend cannot produce summarized reasoning", nil)
 		}
 		// The Router enforces omitted on the client response, both buffered
@@ -61,7 +70,8 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackend(
 	if changed {
 		projected.Generation++ // The source envelope no longer describes this request.
 	}
-	return projected, nil
+	projected, diagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
+	return projected, diagnostics, nil
 }
 
 func anthropicBackendCanDisableReasoning(family *config.ReasoningFamilyConfig) bool {

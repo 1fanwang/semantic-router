@@ -123,8 +123,10 @@ from the translated response, including streaming output. Explicit
 effective backend reasoning-off control. Unsupported controls fail with a typed
 request error. A `context_management` edit of `clear_thinking_20251015` with
 `keep: all` has no effect and is omitted for these backends; edits that would
-change history are rejected. Responses backends still reject Anthropic
-`cache_control` directives because the Responses codec cannot preserve them.
+change history are rejected. Anthropic `cache_control` boundaries are omitted
+when the selected backend uses Responses, which cannot represent them. The
+prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
+`dropped` diagnostic for `cache_control`.
 
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the

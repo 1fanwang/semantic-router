@@ -57,10 +57,20 @@ def chat_requests_mock_tool(req: ChatRequest) -> bool:
 
 
 def chat_contains(req: ChatRequest, marker: str) -> bool:
-    return any(
-        isinstance(message.content, str) and marker in message.content
-        for message in req.messages
-    )
+    for message in req.messages:
+        content = message.content
+        if isinstance(content, str) and marker in content:
+            return True
+        if isinstance(content, list):
+            for part in content:
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "text"
+                    and isinstance(part.get("text"), str)
+                    and marker in part["text"]
+                ):
+                    return True
+    return False
 
 
 def chat_has_tool_result(req: ChatRequest) -> bool:

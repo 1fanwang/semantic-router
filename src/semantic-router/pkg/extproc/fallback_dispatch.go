@@ -393,7 +393,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	projected, projectionErr := r.projectAnthropicRequestForBackend(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
+	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
@@ -401,6 +401,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
 	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 
 	requestBody := encoded.Body
 	adaptedBody, adaptErr := r.adaptProviderRequest(encoded.Body, dispatch, ctx)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -103,7 +102,7 @@ func TestAnthropicAdaptiveStrictCandidatesUseProjectedDemand(t *testing.T) {
 	}
 }
 
-func TestAnthropicAdaptiveResponsesPreservesCacheDirectiveContract(t *testing.T) {
+func TestAnthropicAdaptiveResponsesDropsCacheDirectiveWithWarning(t *testing.T) {
 	router := routingTestRouter("chat")
 	model := router.Config.ModelConfig["chat"]
 	model.APIFormat = config.APIFormatResponses
@@ -117,10 +116,25 @@ func TestAnthropicAdaptiveResponsesPreservesCacheDirectiveContract(t *testing.T)
 		t.Fatal(err)
 	}
 	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
-	_, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx)
-	var protocolError *llmprotocol.ProtocolError
-	if !errors.As(err, &protocolError) || protocolError.Code != "unsupported_capability" || !strings.Contains(protocolError.Message, "cache_directives") {
-		t.Fatalf("Responses silently lost the cache directive: %v", err)
+	ctx.ProtocolEnvelope = llmprotocol.Envelope{}
+	if _, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx); err != nil {
+		t.Fatalf("Responses rejected an Anthropic cache hint: %v", err)
+	}
+	body, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(body, []byte("cache_control")) || !bytes.Contains(body, []byte("hello")) {
+		t.Fatalf("Responses backend received the cache hint or lost prompt content: %s", body)
+	}
+	if len(ctx.ProtocolDiagnostics) != 1 ||
+		ctx.ProtocolDiagnostics[0].Field != "cache_control" ||
+		ctx.ProtocolDiagnostics[0].Action != llmprotocol.DiagnosticDropped ||
+		ctx.ProtocolDiagnostics[0].Target != llmprotocol.OpenAIResponsesV1 {
+		t.Fatalf("Responses cache drop was not reported once: %+v", ctx.ProtocolDiagnostics)
+	}
+	if !llmprotocol.RequiredCapabilities(request).Supports(llmprotocol.CapabilityCacheDirectives) {
+		t.Fatal("dispatch modified the public Anthropic request")
 	}
 }
 

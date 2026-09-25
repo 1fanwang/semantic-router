@@ -120,11 +120,13 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope}, err
 	}
-	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
-		return RequestResult{Request: request, Envelope: envelope}, err
+	projected, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, format)
+	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(projected)); err != nil {
+		return RequestResult{Request: projected, Envelope: envelope, Diagnostics: projectionDiagnostics}, err
 	}
-	body, diagnostics, encodeRequestErr := pair.buffered.EncodeRequest(request, envelope, engine.policy)
-	return RequestResult{Request: request, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
+	body, encodeDiagnostics, encodeRequestErr := pair.buffered.EncodeRequest(projected, envelope, engine.policy)
+	diagnostics := appendDiagnostics(projectionDiagnostics, encodeDiagnostics, engine.policy.Limits.Diagnostics)
+	return RequestResult{Request: projected, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
 }
 
 // EncodeResponse validates and encodes an already-neutral response. Settlement
@@ -172,6 +174,8 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
+	request, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, target)
+	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}

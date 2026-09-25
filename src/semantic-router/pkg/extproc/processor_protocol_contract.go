@@ -213,7 +213,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
-	dispatchRequest, err = r.projectAnthropicRequestForBackend(dispatchRequest, ctx.RequestModel, format)
+	dispatchRequest, projectionDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +233,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	return encodeLooperEvidence(encoded.Body, format, ctx)
 }
