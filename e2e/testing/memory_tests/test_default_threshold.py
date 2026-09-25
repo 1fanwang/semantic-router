@@ -36,7 +36,7 @@ class MemoryDefaultThresholdTest(MemoryFeaturesTest):
             health_url.endswith("/ready"),
             "The memory integration runner must supply the router API readiness URL",
         )
-        endpoint = health_url.removesuffix("/ready") + "/api/v1/embeddings"
+        endpoint = health_url.removesuffix("/ready") + "/api/v1/diagnostics/embeddings"
         response = requests.post(
             endpoint,
             json={"model": "mmbert", "dimension": 768, "texts": texts},
