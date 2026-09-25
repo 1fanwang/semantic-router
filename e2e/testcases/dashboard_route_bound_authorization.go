@@ -107,6 +107,19 @@ func testDashboardRouteBoundAuthorization(ctx context.Context, client *kubernete
 		nil, http.StatusForbidden, nil, "deny unmapped API route"); err != nil {
 		return err
 	}
+	if err := dashboardPolicyPreflight(ctx, httpClient, baseURL, "/api/router/v1/chat/completions"); err != nil {
+		return err
+	}
+	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodPost,
+		"/api/router/v1/chat/completions", "", nil, http.StatusUnauthorized, nil,
+		"deny unauthenticated request after preflight"); err != nil {
+		return err
+	}
+	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodOptions,
+		"/api/e2e-unmapped-"+unique, "", nil, http.StatusForbidden, nil,
+		"deny unmapped preflight"); err != nil {
+		return err
+	}
 
 	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodPatch,
 		"/api/admin/users/"+url.PathEscape(userID), adminToken,
@@ -145,6 +158,26 @@ func dashboardPolicyLogin(ctx context.Context, client *http.Client, baseURL, ema
 		return "", errors.New("login: missing token")
 	}
 	return response.Token, nil
+}
+
+func dashboardPolicyPreflight(ctx context.Context, client *http.Client, baseURL, path string) error {
+	const origin = "https://example.test"
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodOptions, baseURL+path, nil)
+	if requestErr != nil {
+		return fmt.Errorf("create Dashboard preflight: %w", requestErr)
+	}
+	request.Header.Set("Origin", origin)
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		return fmt.Errorf("dashboard preflight request failed (%T)", responseErr)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusNoContent || response.Header.Get("Access-Control-Allow-Origin") != origin {
+		return fmt.Errorf("dashboard preflight returned HTTP %d with allow-origin %q, want 204 and %q",
+			response.StatusCode, response.Header.Get("Access-Control-Allow-Origin"), origin)
+	}
+	return nil
 }
 
 // dashboardPolicyRequest only reports the operation and HTTP status. Invitation

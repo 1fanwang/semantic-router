@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,12 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
+)
+
+// The route contract and multipart parser share the same upload bounds.
+const (
+	MLBenchmarkUploadMaxBytes = 32 << 20
+	MLTrainUploadMaxBytes     = 64 << 20
 )
 
 // MLPipelineHandler holds dependencies for ML pipeline endpoints.
@@ -141,8 +148,8 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 		}
 
 		// Parse multipart form (models YAML + queries JSONL + config)
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+		if err := r.ParseMultipartForm(MLBenchmarkUploadMaxBytes); err != nil {
+			writeMLRequestBodyError(w, err, "Failed to parse form")
 			return
 		}
 
@@ -224,8 +231,8 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 
 		if strings.HasPrefix(contentType, "multipart/form-data") {
 			// ── Multipart upload mode: user uploads a training data file directly ──
-			if err := r.ParseMultipartForm(64 << 20); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+			if err := r.ParseMultipartForm(MLTrainUploadMaxBytes); err != nil {
+				writeMLRequestBodyError(w, err, "Failed to parse form")
 				return
 			}
 
@@ -264,8 +271,17 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 				BenchmarkJobID    string                  `json:"benchmark_job_id"`
 				Config            mlpipeline.TrainRequest `json:"config"`
 			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			decoder := json.NewDecoder(r.Body)
+			if err := decoder.Decode(&body); err != nil {
+				writeMLRequestBodyError(w, err, "Invalid request body")
+				return
+			}
+			var trailing json.RawMessage
+			if err := decoder.Decode(&trailing); err != io.EOF {
+				if err == nil {
+					err = errors.New("trailing JSON value")
+				}
+				writeMLRequestBodyError(w, err, "Invalid request body")
 				return
 			}
 
@@ -307,6 +323,15 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			"status": "started",
 		})
 	}
+}
+
+func writeMLRequestBodyError(w http.ResponseWriter, err error, prefix string) {
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, fmt.Sprintf("%s: %v", prefix, err), http.StatusBadRequest)
 }
 
 // GenerateConfigHandler generates deployment config (Layer 3).
