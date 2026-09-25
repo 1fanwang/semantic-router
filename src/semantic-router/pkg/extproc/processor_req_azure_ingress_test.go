@@ -211,6 +211,29 @@ func TestAzureResponsesAndV1ChatDispatch(t *testing.T) {
 	}
 }
 
+func TestAzureSkipProcessingStripsClientAPIKey(t *testing.T) {
+	for _, path := range []string{
+		"/openai/v1/chat/completions",
+		"/openai/v1/responses",
+		"/openai/responses?api-version=2025-04-01-preview",
+	} {
+		t.Run(path, func(t *testing.T) {
+			router := newRouterWithSkipProcessingGate(true)
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			request := newSkipProcessingRequestHeaders("POST", path, "true")
+			request.RequestHeaders.Headers.Headers = append(request.RequestHeaders.Headers.Headers,
+				&core.HeaderValue{Key: azureAPIKeyHeader, Value: "client-secret"})
+
+			response, err := router.handleRequestHeaders(request, ctx)
+			require.NoError(t, err)
+			require.True(t, ctx.SkipProcessing)
+			require.NotNil(t, response.GetRequestHeaders())
+			removed := response.GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+			assert.Contains(t, removed, azureAPIKeyHeader, "the skip path must not forward an Azure client key")
+		})
+	}
+}
+
 func newAzureIngressTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(azureIngressTestConfig))
