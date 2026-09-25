@@ -9,11 +9,11 @@ import (
 	"reflect"
 	"testing"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func TestDashboardRouteBoundAuthorizationRegistered(t *testing.T) {

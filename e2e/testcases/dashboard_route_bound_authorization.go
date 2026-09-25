@@ -26,17 +26,17 @@ func init() {
 }
 
 func testDashboardRouteBoundAuthorization(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (resultErr error) {
-	localPort, stop, err := setupServiceConnection(ctx, client, opts)
-	if err != nil {
-		return err
+	localPort, stop, connectionErr := setupServiceConnection(ctx, client, opts)
+	if connectionErr != nil {
+		return connectionErr
 	}
 	defer stop()
 
 	httpClient := &http.Client{Timeout: 15 * time.Second}
 	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
-	adminToken, err := dashboardPolicyLogin(ctx, httpClient, baseURL, dashboardE2EAdminEmail, dashboardE2EAdminPassword)
-	if err != nil {
-		return fmt.Errorf("bootstrap admin login: %w", err)
+	adminToken, loginErr := dashboardPolicyLogin(ctx, httpClient, baseURL, dashboardE2EAdminEmail, dashboardE2EAdminPassword)
+	if loginErr != nil {
+		return fmt.Errorf("bootstrap admin login: %w", loginErr)
 	}
 
 	unique := uuid.NewString()
@@ -91,9 +91,9 @@ func testDashboardRouteBoundAuthorization(ctx context.Context, client *kubernete
 		return errors.New("accept read invitation: missing user ID or unexpected role")
 	}
 
-	readToken, err := dashboardPolicyLogin(ctx, httpClient, baseURL, email, password)
-	if err != nil {
-		return fmt.Errorf("read user login: %w", err)
+	readToken, loginErr := dashboardPolicyLogin(ctx, httpClient, baseURL, email, password)
+	if loginErr != nil {
+		return fmt.Errorf("read user login: %w", loginErr)
 	}
 	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodGet, "/api/router/config/all", readToken,
 		nil, http.StatusOK, nil, "read config"); err != nil {
