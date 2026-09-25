@@ -10,6 +10,8 @@ import requests
 
 from memory_tests.base import HTTP_OK, MemoryFeaturesTest
 
+MIN_ORTHOGONAL_RESIDUAL_NORM = 1e-6
+
 
 class MemoryDefaultThresholdTest(MemoryFeaturesTest):
     """A score between 0.60 and 0.70 must be rejected when the plugin says 0."""
@@ -58,7 +60,7 @@ class MemoryDefaultThresholdTest(MemoryFeaturesTest):
             for control, zero in zip(control_query, zero_query, strict=True)
         ]
         residual_norm = math.sqrt(sum(value * value for value in residual))
-        if residual_norm < 1e-6:
+        if residual_norm < MIN_ORTHOGONAL_RESIDUAL_NORM:
             axis = min(range(len(zero_query)), key=lambda index: abs(zero_query[index]))
             residual = [-zero_query[axis] * value for value in zero_query]
             residual[axis] += 1
