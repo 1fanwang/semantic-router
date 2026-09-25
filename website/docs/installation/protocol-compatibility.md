@@ -207,13 +207,15 @@ The Router handles them as follows:
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
 
-Codex can also request reasoning summaries, multi-agent namespace tools, and the
-hosted web search tool. The Router does not support those, so turn them off in
-the Codex `config.toml` that points at the Router. These settings were checked
-with Codex CLI 0.156.1:
+Codex can also request reasoning summaries. The Router forwards
+`reasoning.summary` to a Responses backend. A Chat Completions or Messages
+backend cannot request a summary, so the Router accepts the turn and reports
+the dropped setting in `x-vsr-protocol-warnings`. Multi-agent namespace tools
+and hosted web search remain unsupported; disable those in the Codex
+`config.toml` that points at the Router. These settings were checked with
+Codex CLI 0.156.1:
 
 ```toml
-model_reasoning_summary = "none"
 web_search = "disabled"
 
 [features]

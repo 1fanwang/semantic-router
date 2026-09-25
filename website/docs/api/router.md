@@ -169,8 +169,10 @@ For GitHub Copilot CLI, set `COPILOT_PROVIDER_TYPE=azure`, point
 `COPILOT_PROVIDER_WIRE_API=responses`, the CLI uses `/openai/v1/responses`, or
 `/openai/responses` when `COPILOT_PROVIDER_AZURE_API_VERSION` is set. The
 supported Chat paths are `/openai/v1/chat/completions` and the deployment
-route shown above. For Responses turns, Copilot's `reasoning.summary` field
-is not yet portable; use `--reasoning-effort none` when it sends that field.
+route shown above. The Router accepts Copilot's `reasoning.summary` on Responses
+turns. It forwards the setting to a Responses backend. With a Chat Completions
+or Messages backend, the turn still runs, but the summary request is dropped
+and reported in `x-vsr-protocol-warnings`.
 
 Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,

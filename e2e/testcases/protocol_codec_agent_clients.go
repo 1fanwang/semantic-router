@@ -24,6 +24,20 @@ func init() {
 		Tags:        []string{"protocol-codec", "azure", "agents", "security"},
 		Fn:          testProtocolCodecAzureIngress,
 	})
+	pkgtestcases.Register("protocol-codec-reasoning-summary-responses-backend", pkgtestcases.TestCase{
+		Description: "Responses reasoning summaries reach a native Responses backend and invalid values fail at ingress",
+		Tags:        []string{"protocol-codec", "response-api", "agents"},
+		Fn:          testProtocolCodecReasoningSummaryResponsesBackend,
+	})
+}
+
+func hasProtocolFieldDiagnostic(header, action, field string) bool {
+	for _, entry := range strings.Split(header, ",") {
+		if strings.HasPrefix(entry, action+";") && strings.HasSuffix(entry, ";"+field) {
+			return true
+		}
+	}
+	return false
 }
 
 func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -53,12 +67,14 @@ func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clien
 		{
 			name: "dated-responses", path: "/openai/responses?api-version=2025-04-01-preview", responses: true,
 			marker: "Azure dated Responses probe",
-			body:   map[string]any{"model": chatBackendModel, "input": "Azure dated Responses probe", "store": false},
+			body: map[string]any{"model": chatBackendModel, "input": "Azure dated Responses probe", "store": false,
+				"reasoning": map[string]string{"summary": "auto"}},
 		},
 		{
 			name: "v1-responses", path: "/openai/v1/responses", responses: true,
 			marker: "Azure v1 Responses probe",
-			body:   map[string]any{"model": chatBackendModel, "input": "Azure v1 Responses probe", "store": false},
+			body: map[string]any{"model": chatBackendModel, "input": "Azure v1 Responses probe", "store": false,
+				"reasoning": map[string]string{"summary": "auto"}},
 		},
 		{
 			name: "v1-chat", path: "/openai/v1/chat/completions",
@@ -80,6 +96,9 @@ func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clien
 			if err := assertResponsesBody(result.Body, `"protocol":"chat_completions"`); err != nil {
 				return fmt.Errorf("%s response: %w", check.name, err)
 			}
+			if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+				return fmt.Errorf("%s did not report the dropped reasoning summary: %q", check.name, warnings)
+			}
 		} else if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
 			return fmt.Errorf("%s response: %w", check.name, err)
 		}
@@ -96,6 +115,11 @@ func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clien
 		}
 		if observed.APIKeyPresent {
 			return fmt.Errorf("%s leaked the Azure client api-key to the provider", check.name)
+		}
+		if check.responses {
+			if _, forwarded := observed.Body["reasoning"]; forwarded {
+				return fmt.Errorf("%s forwarded reasoning.summary to a Chat backend: %s", check.name, observed.Body["reasoning"])
+			}
 		}
 		if len(observed.Body["model"]) == 0 || len(observed.Body["messages"]) == 0 ||
 			!strings.Contains(string(raw), check.marker) {
@@ -146,12 +170,13 @@ func testProtocolCodecAgentClientFields(ctx context.Context, client *kubernetes.
 				"include":          []string{"reasoning.encrypted_content"},
 				"client_metadata":  map[string]any{"x-codex-turn-metadata": `{"request_kind":"turn"}`},
 				"prompt_cache_key": cacheKey,
+				"reasoning":        map[string]string{"summary": "auto"},
 			},
 			inspect: func(body map[string]json.RawMessage) error {
 				if string(body["prompt_cache_key"]) != `"`+cacheKey+`"` {
 					return fmt.Errorf("codex cache key was lost in Chat dispatch: %s", body["prompt_cache_key"])
 				}
-				for _, field := range []string{"include", "client_metadata", "store"} {
+				for _, field := range []string{"include", "client_metadata", "store", "reasoning"} {
 					if _, found := body[field]; found {
 						return fmt.Errorf("unsupported Codex field %q leaked to Chat provider", field)
 					}
@@ -203,6 +228,9 @@ func testProtocolCodecAgentClientFields(ctx context.Context, client *kubernetes.
 			if err := assertResponsesBody(result.Body, `"protocol":"chat_completions"`); err != nil {
 				return fmt.Errorf("%s response: %w", check.name, err)
 			}
+			if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+				return fmt.Errorf("%s did not report the dropped reasoning summary: %q", check.name, warnings)
+			}
 		} else if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
 			return fmt.Errorf("%s response: %w", check.name, err)
 		}
@@ -223,6 +251,69 @@ func testProtocolCodecAgentClientFields(ctx context.Context, client *kubernetes.
 		if err := check.inspect(observation.Body); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func testProtocolCodecReasoningSummaryResponsesBackend(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	session, sessionErr := fixtures.OpenServiceSession(ctx, client, opts)
+	if sessionErr != nil {
+		return sessionErr
+	}
+	defer session.Close()
+	provider, providerErr := openProtocolCodecProviderSession(ctx, client, opts, "openai.responses.v1")
+	if providerErr != nil {
+		return providerErr
+	}
+	defer provider.Close()
+
+	const marker = "Native Responses reasoning summary probe"
+	const sessionID = "reasoning-summary-native-responses"
+	result, requestErr := sendProtocolMatrixRaw(ctx, session, "/v1/responses", map[string]any{
+		"model": nativeResponsesBackendModel, "input": marker, "store": false,
+		"reasoning": map[string]string{"summary": "auto"},
+	}, false, map[string]string{"x-vsr-test-session-id": sessionID})
+	if requestErr != nil {
+		return fmt.Errorf("native Responses summary request: %w", requestErr)
+	}
+	if result.StatusCode != http.StatusOK {
+		return fmt.Errorf("native Responses summary returned HTTP %d: %s", result.StatusCode, truncateString(string(result.Body), 500))
+	}
+	if err := assertResponsesBody(result.Body, protocolCodecResponsesReply); err != nil {
+		return fmt.Errorf("native Responses summary response: %w", err)
+	}
+	if warnings := result.Headers.Get("x-vsr-protocol-warnings"); hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+		return fmt.Errorf("native Responses backend dropped reasoning.summary: %q", warnings)
+	}
+	raw, observationErr := lastProviderSimulatorRequest(ctx, provider, sessionID)
+	if observationErr != nil {
+		return fmt.Errorf("native Responses provider observation: %w", observationErr)
+	}
+	var observed struct {
+		Body map[string]json.RawMessage `json:"body"`
+	}
+	if err := json.Unmarshal(raw, &observed); err != nil {
+		return fmt.Errorf("decode native Responses provider observation: %w", err)
+	}
+	if !strings.Contains(string(raw), marker) {
+		return fmt.Errorf("native Responses provider observation does not match request: %s", truncateString(string(raw), 500))
+	}
+	var reasoning struct {
+		Summary string `json:"summary"`
+	}
+	if err := json.Unmarshal(observed.Body["reasoning"], &reasoning); err != nil || reasoning.Summary != "auto" {
+		return fmt.Errorf("native Responses provider lost reasoning.summary: %s (%v)", observed.Body["reasoning"], err)
+	}
+
+	invalid, invalidErr := sendProtocolMatrixRaw(ctx, session, "/v1/responses", map[string]any{
+		"model": nativeResponsesBackendModel, "input": marker,
+		"reasoning": map[string]string{"summary": ""},
+	}, false, nil)
+	if invalidErr != nil {
+		return fmt.Errorf("invalid Responses summary request: %w", invalidErr)
+	}
+	if invalid.StatusCode != http.StatusBadRequest || !strings.Contains(string(invalid.Body), "invalid_reasoning_summary") {
+		return fmt.Errorf("empty reasoning.summary returned HTTP %d: %s", invalid.StatusCode, truncateString(string(invalid.Body), 500))
 	}
 	return nil
 }
