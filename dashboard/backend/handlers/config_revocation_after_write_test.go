@@ -59,11 +59,11 @@ func TestConfigMutationRevokedAtFileCommitRestoresPreviousConfig(t *testing.T) {
 			originalRename := atomicRename
 			t.Cleanup(func() { atomicRename = originalRename })
 			atomicRename = func(source, destination string) error {
-				err := originalRename(source, destination)
-				if err == nil && filepath.Clean(destination) == filepath.Clean(configPath) && configCommits.Add(1) == 1 {
+				renameErr := originalRename(source, destination)
+				if renameErr == nil && filepath.Clean(destination) == filepath.Clean(configPath) && configCommits.Add(1) == 1 {
 					allowed.Store(false)
 				}
-				return err
+				return renameErr
 			}
 			request := httptest.NewRequest(http.MethodPost, test.path, bytes.NewReader(test.body(t)))
 			request = request.WithContext(auth.WithPermissionRevalidator(request.Context(), func(context.Context) error {

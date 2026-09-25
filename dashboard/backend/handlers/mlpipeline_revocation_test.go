@@ -92,8 +92,8 @@ func TestMLPipelineRevocationDuringBodyPreventsJobSubmission(t *testing.T) {
 						t.Fatal(writeErr)
 					}
 				}
-				if err := writer.Close(); err != nil {
-					t.Fatal(err)
+				if closeErr := writer.Close(); closeErr != nil {
+					t.Fatal(closeErr)
 				}
 				contentType = writer.FormDataContentType()
 			case "config":

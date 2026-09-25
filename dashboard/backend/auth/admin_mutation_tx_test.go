@@ -13,9 +13,12 @@ func TestAdminMutationRevalidatesActorInsideWriteTransaction(t *testing.T) {
 		operation string
 		revoke    string
 	}{
-		{"role", "permission"}, {"role", "session"},
-		{"delete", "permission"}, {"delete", "session"},
-		{"password", "permission"}, {"password", "session"},
+		{"role", "permission"},
+		{"role", "session"},
+		{"delete", "permission"},
+		{"delete", "session"},
+		{"password", "permission"},
+		{"password", "session"},
 	} {
 		t.Run(test.operation+"/"+test.revoke, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "auth.db")
@@ -31,8 +34,8 @@ func TestAdminMutationRevalidatesActorInsideWriteTransaction(t *testing.T) {
 			t.Cleanup(func() { _ = revoker.Close() })
 			svc := NewService(store, "admin-mutation-transaction-secret", 1)
 			ctx := context.Background()
-			if err := svc.EnsureBootstrapAdmin(ctx, "admin@example.test", "test-password", "Admin"); err != nil {
-				t.Fatal(err)
+			if bootstrapErr := svc.EnsureBootstrapAdmin(ctx, "admin@example.test", "test-password", "Admin"); bootstrapErr != nil {
+				t.Fatal(bootstrapErr)
 			}
 			token, admin, err := svc.Login(ctx, "admin@example.test", "test-password")
 			if err != nil {
@@ -61,8 +64,8 @@ func TestAdminMutationRevalidatesActorInsideWriteTransaction(t *testing.T) {
 			go func() {
 				switch test.operation {
 				case "role":
-					_, err := store.UpdateUserRoleOrStatusAuthorized(ctx, actor, target.ID, RoleWrite, "active")
-					finished <- err
+					_, mutationErr := store.UpdateUserRoleOrStatusAuthorized(ctx, actor, target.ID, RoleWrite, "active")
+					finished <- mutationErr
 				case "delete":
 					finished <- store.DeleteUserAuthorized(ctx, actor, target.ID)
 				case "password":
@@ -84,17 +87,17 @@ func TestAdminMutationRevalidatesActorInsideWriteTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := hold.Rollback(); err != nil {
-				t.Fatal(err)
+			if rollbackErr := hold.Rollback(); rollbackErr != nil {
+				t.Fatal(rollbackErr)
 			}
 			select {
-			case err := <-finished:
+			case mutationErr := <-finished:
 				want := ErrPermissionDenied
 				if test.revoke == "session" {
 					want = errAdminSessionInvalid
 				}
-				if !errors.Is(err, want) {
-					t.Fatalf("mutation after revocation = %v, want %v", err, want)
+				if !errors.Is(mutationErr, want) {
+					t.Fatalf("mutation after revocation = %v, want %v", mutationErr, want)
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("admin mutation did not finish")
@@ -116,9 +119,12 @@ func TestAdminInvitationMutationRevalidatesActorInsideWriteTransaction(t *testin
 		operation string
 		revoke    string
 	}{
-		{"create", "permission"}, {"create", "session"},
-		{"rotate", "permission"}, {"rotate", "session"},
-		{"revoke", "permission"}, {"revoke", "session"},
+		{"create", "permission"},
+		{"create", "session"},
+		{"rotate", "permission"},
+		{"rotate", "session"},
+		{"revoke", "permission"},
+		{"revoke", "session"},
 	} {
 		t.Run(test.operation+"/"+test.revoke, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "auth.db")
@@ -134,8 +140,8 @@ func TestAdminInvitationMutationRevalidatesActorInsideWriteTransaction(t *testin
 			t.Cleanup(func() { _ = revoker.Close() })
 			svc := NewService(store, "admin-invitation-transaction-secret", 1)
 			ctx := context.Background()
-			if err := svc.EnsureBootstrapAdmin(ctx, "admin@example.test", "test-password", "Admin"); err != nil {
-				t.Fatal(err)
+			if bootstrapErr := svc.EnsureBootstrapAdmin(ctx, "admin@example.test", "test-password", "Admin"); bootstrapErr != nil {
+				t.Fatal(bootstrapErr)
 			}
 			token, admin, err := svc.Login(ctx, "admin@example.test", "test-password")
 			if err != nil {
@@ -168,11 +174,11 @@ func TestAdminInvitationMutationRevalidatesActorInsideWriteTransaction(t *testin
 			go func() {
 				switch test.operation {
 				case "create":
-					_, err := store.CreateInvitation(ctx, InvitationPersonal, "next@example.test", "Next", RoleAdmin, "next-digest", admin.ID, 1, time.Now().Add(time.Hour).Unix(), actor)
-					finished <- err
+					_, mutationErr := store.CreateInvitation(ctx, InvitationPersonal, "next@example.test", "Next", RoleAdmin, "next-digest", admin.ID, 1, time.Now().Add(time.Hour).Unix(), actor)
+					finished <- mutationErr
 				case "rotate":
-					_, err := store.RotateInvitation(ctx, invitation.ID, "rotated-digest", time.Now().Add(time.Hour).Unix(), actor)
-					finished <- err
+					_, mutationErr := store.RotateInvitation(ctx, invitation.ID, "rotated-digest", time.Now().Add(time.Hour).Unix(), actor)
+					finished <- mutationErr
 				case "revoke":
 					finished <- store.RevokeInvitation(ctx, invitation.ID, actor)
 				}
@@ -192,17 +198,17 @@ func TestAdminInvitationMutationRevalidatesActorInsideWriteTransaction(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := hold.Rollback(); err != nil {
-				t.Fatal(err)
+			if rollbackErr := hold.Rollback(); rollbackErr != nil {
+				t.Fatal(rollbackErr)
 			}
 			select {
-			case err := <-finished:
+			case mutationErr := <-finished:
 				want := ErrPermissionDenied
 				if test.revoke == "session" {
 					want = errAdminSessionInvalid
 				}
-				if !errors.Is(err, want) {
-					t.Fatalf("invitation mutation after revocation = %v, want %v", err, want)
+				if !errors.Is(mutationErr, want) {
+					t.Fatalf("invitation mutation after revocation = %v, want %v", mutationErr, want)
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("invitation mutation did not finish")
