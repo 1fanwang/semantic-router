@@ -44,6 +44,7 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 	cases := []struct {
 		name, path string
 		body       map[string]any
+		wantLimit  string
 		assert     func([]byte, string) error
 	}{
 		{
@@ -52,7 +53,7 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 				"model": ollamaCodecModel, "max_tokens": 8,
 				"messages": []map[string]string{{"role": "user", "content": "Ollama Chat limit probe"}},
 			},
-			assert: assertChatCompletionBody,
+			wantLimit: "8", assert: assertChatCompletionBody,
 		},
 		{
 			name: "messages", path: "/v1/messages",
@@ -60,15 +61,15 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 				"model": ollamaCodecModel, "max_tokens": 8,
 				"messages": []map[string]string{{"role": "user", "content": "Ollama Messages limit probe"}},
 			},
-			assert: assertAnthropicBody,
+			wantLimit: "8", assert: assertAnthropicBody,
 		},
 		{
 			name: "responses", path: "/v1/responses",
 			body: map[string]any{
-				"model": ollamaCodecModel, "max_output_tokens": 8, "store": false,
+				"model": ollamaCodecModel, "max_output_tokens": 16, "store": false,
 				"input": "Ollama Responses limit probe",
 			},
-			assert: assertResponsesBody,
+			wantLimit: "16", assert: assertResponsesBody,
 		},
 	}
 	for _, check := range cases {
@@ -95,7 +96,7 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 		if decodeErr := json.Unmarshal(observed, &receipt); decodeErr != nil {
 			return fmt.Errorf("decode %s Ollama provider observation: %w", check.name, decodeErr)
 		}
-		if string(receipt.Body["max_tokens"]) != "8" || string(receipt.Body["model"]) != `"`+ollamaCodecModel+`"` {
+		if string(receipt.Body["max_tokens"]) != check.wantLimit || string(receipt.Body["model"]) != `"`+ollamaCodecModel+`"` {
 			return fmt.Errorf("%s Ollama provider lost the model or output limit: %s", check.name,
 				truncateString(string(observed), 500))
 		}
@@ -110,7 +111,7 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 	const controlPrompt = "Ordinary Chat limit control"
 	controlID := "ollama-limit-control-" + uuid.NewString()
 	control, err := sendProtocolMatrixRaw(ctx, session, "/v1/chat/completions", map[string]any{
-		"model": chatBackendModel, "max_tokens": 8,
+		"model": "astra-chat", "max_tokens": 8,
 		"messages": []map[string]string{{"role": "user", "content": controlPrompt}},
 	}, false, map[string]string{"x-vsr-test-session-id": controlID})
 	if err != nil {
