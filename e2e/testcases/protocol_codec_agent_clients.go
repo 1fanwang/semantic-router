@@ -67,14 +67,18 @@ func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clien
 		{
 			name: "dated-responses", path: "/openai/responses?api-version=2025-04-01-preview", responses: true,
 			marker: "Azure dated Responses probe",
-			body: map[string]any{"model": chatBackendModel, "input": "Azure dated Responses probe", "store": false,
-				"reasoning": map[string]string{"summary": "auto"}},
+			body: map[string]any{
+				"model": chatBackendModel, "input": "Azure dated Responses probe", "store": false,
+				"reasoning": map[string]string{"summary": "auto"},
+			},
 		},
 		{
 			name: "v1-responses", path: "/openai/v1/responses", responses: true,
 			marker: "Azure v1 Responses probe",
-			body: map[string]any{"model": chatBackendModel, "input": "Azure v1 Responses probe", "store": false,
-				"reasoning": map[string]string{"summary": "auto"}},
+			body: map[string]any{
+				"model": chatBackendModel, "input": "Azure v1 Responses probe", "store": false,
+				"reasoning": map[string]string{"summary": "auto"},
+			},
 		},
 		{
 			name: "v1-chat", path: "/openai/v1/chat/completions",
@@ -301,8 +305,11 @@ func testProtocolCodecReasoningSummaryResponsesBackend(ctx context.Context, clie
 	var reasoning struct {
 		Summary string `json:"summary"`
 	}
-	if err := json.Unmarshal(observed.Body["reasoning"], &reasoning); err != nil || reasoning.Summary != "auto" {
-		return fmt.Errorf("native Responses provider lost reasoning.summary: %s (%v)", observed.Body["reasoning"], err)
+	if err := json.Unmarshal(observed.Body["reasoning"], &reasoning); err != nil {
+		return fmt.Errorf("decode native Responses reasoning summary: %w", err)
+	}
+	if reasoning.Summary != "auto" {
+		return fmt.Errorf("native Responses provider lost reasoning.summary: %s", observed.Body["reasoning"])
 	}
 
 	invalid, invalidErr := sendProtocolMatrixRaw(ctx, session, "/v1/responses", map[string]any{
