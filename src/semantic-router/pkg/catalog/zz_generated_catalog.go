@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:8a9bcd7cf58241263e3ecab85b64ef82edbec81eeb2c38312fbf5380a91ed944"
+const builtInCatalogDigest = "sha256:2bc3510632df96c785f4c8a3c6644c1ccac2b71cbe221e476aeb7d58a479c6db"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -88952,7 +88952,7 @@ const builtInCatalogJSON = `{
       "family": "seed-2.0",
       "id": "bytedance/seed-2.0-pro",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 262144
       },
@@ -88981,9 +88981,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "ByteDance Seed Team",
-        "source": "https://seed.bytedance.com/en/seed2",
+        "source": "https://docs.volcengine.com/docs/ark/model-deprecation-notice?lang=zh",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-26"
       }
     },
     {
@@ -98724,7 +98724,7 @@ const builtInCatalogJSON = `{
         {
           "catalog": "bytedance/seed-2.0-pro",
           "id": "doubao-seed-2-0-pro-260215",
-          "lifecycle": "active",
+          "lifecycle": "deprecated",
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
