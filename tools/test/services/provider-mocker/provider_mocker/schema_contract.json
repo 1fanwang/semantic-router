@@ -238,6 +238,7 @@
         "prompt_routed_experts",
         "prompt_text",
         "prompt_token_ids",
+        "provider",
         "remote_block_ids",
         "remote_engine_id",
         "remote_host",
@@ -255,7 +256,10 @@
       ],
       "extension_usage_fields": [
         "completion_time",
+        "cost",
+        "cost_details",
         "cost_in_usd_ticks",
+        "is_byok",
         "num_sources_used",
         "prompt_time",
         "queue_time",

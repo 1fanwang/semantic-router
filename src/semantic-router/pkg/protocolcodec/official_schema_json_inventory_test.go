@@ -279,6 +279,7 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"chat_error":                      reflect.TypeOf(chatErrorWire{}),
 		"chat_prompt_usage_details":       reflect.TypeOf(chatPromptTokensDetailsWire{}),
 		"chat_completion_usage_details":   reflect.TypeOf(chatCompletionTokensDetailsWire{}),
+		"chat_usage_cost_details":         reflect.TypeOf(chatUsageCostDetailsWire{}),
 		"openai_transport_error":          reflect.TypeOf(openAITransportErrorWire{}),
 		"openai_transport_error_detail":   reflect.TypeOf(openAITransportErrorDetailWire{}),
 		"responses_reasoning":             reflect.TypeOf(responsesReasoningWire{}),

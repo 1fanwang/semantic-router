@@ -37,6 +37,8 @@ type chatResponseWire struct {
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
 	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+	// OpenRouter names the upstream provider that served the request.
+	Provider *string `json:"provider,omitempty"`
 }
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
@@ -61,6 +63,8 @@ type chatChoiceWire struct {
 	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs      []int64             `json:"token_ids,omitempty"`
 	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	// OpenRouter repeats the upstream provider's raw reason beside the normalized finish_reason.
+	NativeFinishReason *string `json:"native_finish_reason,omitempty"`
 }
 
 type chatServiceTierWire string
@@ -174,6 +178,17 @@ type chatUsageWire struct {
 	PromptTime     *float64 `json:"prompt_time,omitempty"`
 	CompletionTime *float64 `json:"completion_time,omitempty"`
 	TotalTime      *float64 `json:"total_time,omitempty"`
+	// OpenRouter reports its billed cost and whether the caller's own provider key served the request.
+	Cost        *float64                  `json:"cost,omitempty"`
+	IsBYOK      *bool                     `json:"is_byok,omitempty"`
+	CostDetails *chatUsageCostDetailsWire `json:"cost_details,omitempty"`
+}
+
+type chatUsageCostDetailsWire struct {
+	UpstreamInferenceCost            *float64 `json:"upstream_inference_cost,omitempty"`
+	UpstreamInferencePromptCost      float64  `json:"upstream_inference_prompt_cost"`
+	UpstreamInferenceCompletionsCost float64  `json:"upstream_inference_completions_cost"`
+	ServerToolCost                   *float64 `json:"server_tool_cost,omitempty"`
 }
 
 type chatPromptTokensDetailsWire struct {
@@ -185,6 +200,7 @@ type chatPromptTokensDetailsWire struct {
 	AudioTokens         int64            `json:"audio_tokens,omitempty"`
 	TextTokens          int64            `json:"text_tokens,omitempty"`
 	ImageTokens         int64            `json:"image_tokens,omitempty"`
+	VideoTokens         int64            `json:"video_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {
@@ -193,6 +209,7 @@ type chatCompletionTokensDetailsWire struct {
 	ReasoningTokens          int64 `json:"reasoning_tokens"`
 	TextTokens               int64 `json:"text_tokens,omitempty"`
 	RejectedPredictionTokens int64 `json:"rejected_prediction_tokens,omitempty"`
+	ImageTokens              int64 `json:"image_tokens,omitempty"`
 }
 
 type chatErrorWire struct {
