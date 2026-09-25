@@ -16,6 +16,7 @@ import (
 func unsupportedThinkingRequest(model string) *llmprotocol.Request {
 	request := testNeutralRequest(model, "Create hello.txt containing hi.")
 	request.ReasoningMode = llmprotocol.ReasoningModeDisabled
+	request.Trusted.SourceFormat = llmprotocol.AnthropicMessagesV1
 	return request
 }
 
