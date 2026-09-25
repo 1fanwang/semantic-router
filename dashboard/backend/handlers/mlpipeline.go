@@ -277,7 +277,7 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 				return
 			}
 			var trailing json.RawMessage
-			if err := decoder.Decode(&trailing); err != io.EOF {
+			if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 				if err == nil {
 					err = errors.New("trailing JSON value")
 				}
