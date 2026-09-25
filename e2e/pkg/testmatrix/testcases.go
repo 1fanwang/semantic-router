@@ -72,6 +72,8 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
+	"dashboard-route-bound-authorization",
 	// Config endpoints
 	"dashboard-config-read",
 	"dashboard-deploy-preview",
