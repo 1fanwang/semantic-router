@@ -10,9 +10,17 @@ import (
 
 var errAdminSessionInvalid = errors.New("admin session is no longer active")
 
+func optionalAdminActor(actors []AuthContext) *AuthContext {
+	if len(actors) == 0 {
+		return nil
+	}
+	return &actors[0]
+}
+
 // withAdminMutation serializes the actor check and the account write on the
-// same SQLite connection. A revocation that commits first is observed; a
-// revocation that arrives after this transaction starts waits for its commit.
+// same SQLite connection. A revocation committed before the check is observed;
+// a concurrent database writer cannot make this transaction commit with a
+// stale authorization snapshot.
 // Direct in-process callers without a Dashboard session retain the existing
 // store API behavior.
 func (s *Store) withAdminMutation(ctx context.Context, actor *AuthContext, mutate func(*sql.Tx) error) error {
