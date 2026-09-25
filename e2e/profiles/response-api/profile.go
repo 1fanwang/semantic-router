@@ -81,6 +81,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-responses-backend-buffered-matrix",
 		"protocol-codec-responses-backend-streaming-matrix",
 		"protocol-codec-chat-backend-tool-lifecycle",
+		"protocol-codec-chat-custom-tool-kind-switch",
 		"protocol-codec-responses-backend-tool-lifecycle",
 		"protocol-codec-chat-backend-structured-output",
 		"protocol-codec-responses-backend-structured-output",

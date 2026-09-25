@@ -16,6 +16,7 @@ from .chat_wire import (
     chat_contains,
     chat_has_tool_result,
     chat_requests_mock_tool,
+    generate_chat_custom_tool_kind_stream,
     generate_chat_midstream_error,
     generate_chat_stream,
     generate_chat_tool_stream,
@@ -31,6 +32,13 @@ from .settings import apply_fixture_delay
 from .shadow_control import ShadowControl
 
 router = APIRouter()
+
+CUSTOM_TOOL_KIND_STREAM_MARKERS = {
+    "__mock_custom_kind_custom_to_function__": "custom_to_function",
+    "__mock_custom_kind_custom_to_untyped_function__": "custom_to_untyped_function",
+    "__mock_custom_kind_function_to_custom__": "function_to_custom",
+    "__mock_custom_kind_valid_custom__": "valid_custom",
+}
 
 
 def is_hallucination_detection_request(req: ChatRequest) -> bool:
@@ -106,6 +114,23 @@ async def chat_completions(request: Request):
     scenario_response = await respond_to_scenario(request, req, created_ts)
     if scenario_response is not None:
         return scenario_response
+    if (
+        req.stream
+        and req.tools
+        and any(
+            tool.get("type") == "custom"
+            and isinstance(tool.get("custom"), dict)
+            and tool["custom"].get("name") == "apply_patch"
+            for tool in req.tools
+        )
+    ):
+        for marker, variant in CUSTOM_TOOL_KIND_STREAM_MARKERS.items():
+            if chat_contains(req, marker):
+                return StreamingResponse(
+                    generate_chat_custom_tool_kind_stream(req, created_ts, variant),
+                    media_type="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                )
     control_response = mock_chat_control_response(req, created_ts)
     if control_response is not None:
         return control_response
