@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
@@ -181,6 +182,9 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 			}
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		ctx := context.Background()
 		jobID, err := h.runner.RunBenchmark(ctx, modelsPath, queriesPath, req)
 		if err != nil {
@@ -285,6 +289,9 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			trainConfig.Algorithms = []string{"knn", "kmeans", "svm", "mlp"}
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		ctx := context.Background()
 		jobID, err := h.runner.RunTrain(ctx, benchmarkDataPath, trainConfig)
 		if err != nil {
@@ -316,6 +323,9 @@ func (h *MLPipelineHandler) GenerateConfigHandler() http.HandlerFunc {
 		var req mlpipeline.ConfigRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
 
