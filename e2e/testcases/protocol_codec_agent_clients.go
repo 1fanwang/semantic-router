@@ -20,7 +20,7 @@ func init() {
 		Fn:          testProtocolCodecAgentClientFields,
 	})
 	pkgtestcases.Register("protocol-codec-azure-ingress", pkgtestcases.TestCase{
-		Description: "Azure deployment paths select the model and strip the client API key before Chat dispatch",
+		Description: "Azure Chat and Responses paths preserve wire format, route the model and strip the client API key",
 		Tags:        []string{"protocol-codec", "azure", "agents", "security"},
 		Fn:          testProtocolCodecAzureIngress,
 	})
@@ -38,47 +38,83 @@ func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clien
 	}
 	defer provider.Close()
 
-	const sessionID = "azure-ingress-codec-e2e"
-	path := "/openai/deployments/" + chatBackendModel + "/chat/completions?api-version=2024-10-21"
-	result, requestErr := sendProtocolMatrixRaw(ctx, session, path, map[string]any{
-		"messages": []map[string]string{{"role": "user", "content": "Azure ingress probe"}},
-	}, false, map[string]string{
-		"api-key": "azure-client-test-key", "x-vsr-test-session-id": sessionID,
-	})
-	if requestErr != nil {
-		return requestErr
+	cases := []struct {
+		name      string
+		path      string
+		marker    string
+		body      map[string]any
+		responses bool
+	}{
+		{
+			name: "deployment-chat", path: "/openai/deployments/" + chatBackendModel + "/chat/completions?api-version=2024-10-21",
+			marker: "Azure deployment Chat probe",
+			body:   map[string]any{"messages": []map[string]string{{"role": "user", "content": "Azure deployment Chat probe"}}},
+		},
+		{
+			name: "dated-responses", path: "/openai/responses?api-version=2025-04-01-preview", responses: true,
+			marker: "Azure dated Responses probe",
+			body:   map[string]any{"model": chatBackendModel, "input": "Azure dated Responses probe", "store": false},
+		},
+		{
+			name: "v1-responses", path: "/openai/v1/responses", responses: true,
+			marker: "Azure v1 Responses probe",
+			body:   map[string]any{"model": chatBackendModel, "input": "Azure v1 Responses probe", "store": false},
+		},
+		{
+			name: "v1-chat", path: "/openai/v1/chat/completions",
+			marker: "Azure v1 Chat probe",
+			body:   map[string]any{"model": chatBackendModel, "messages": []map[string]string{{"role": "user", "content": "Azure v1 Chat probe"}}},
+		},
 	}
-	if result.StatusCode != http.StatusOK {
-		return fmt.Errorf("azure deployment Chat returned HTTP %d: %s", result.StatusCode, truncateString(string(result.Body), 500))
+	for _, check := range cases {
+		sessionID := "azure-ingress-codec-e2e-" + check.name
+		result, requestErr := sendProtocolMatrixRaw(ctx, session, check.path, check.body, false,
+			map[string]string{"api-key": "azure-client-test-key", "x-vsr-test-session-id": sessionID})
+		if requestErr != nil {
+			return fmt.Errorf("%s request: %w", check.name, requestErr)
+		}
+		if result.StatusCode != http.StatusOK {
+			return fmt.Errorf("%s returned HTTP %d: %s", check.name, result.StatusCode, truncateString(string(result.Body), 500))
+		}
+		if check.responses {
+			if err := assertResponsesBody(result.Body, `"protocol":"chat_completions"`); err != nil {
+				return fmt.Errorf("%s response: %w", check.name, err)
+			}
+		} else if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
+			return fmt.Errorf("%s response: %w", check.name, err)
+		}
+		raw, observationErr := lastProviderSimulatorRequest(ctx, provider, sessionID)
+		if observationErr != nil {
+			return fmt.Errorf("%s provider observation: %w", check.name, observationErr)
+		}
+		var observed struct {
+			Body          map[string]json.RawMessage `json:"body"`
+			APIKeyPresent bool                       `json:"api_key_present"`
+		}
+		if err := json.Unmarshal(raw, &observed); err != nil {
+			return fmt.Errorf("%s provider observation decode: %w", check.name, err)
+		}
+		if observed.APIKeyPresent {
+			return fmt.Errorf("%s leaked the Azure client api-key to the provider", check.name)
+		}
+		if len(observed.Body["model"]) == 0 || len(observed.Body["messages"]) == 0 ||
+			!strings.Contains(string(raw), check.marker) {
+			return fmt.Errorf("%s did not select and dispatch the model: %s", check.name, truncateString(string(raw), 500))
+		}
 	}
-	if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
-		return err
-	}
-	raw, observationErr := lastProviderSimulatorRequest(ctx, provider, sessionID)
-	if observationErr != nil {
-		return observationErr
-	}
-	var observed struct {
-		Body          map[string]json.RawMessage `json:"body"`
-		APIKeyPresent bool                       `json:"api_key_present"`
-	}
-	if err := json.Unmarshal(raw, &observed); err != nil {
-		return err
-	}
-	if observed.APIKeyPresent {
-		return fmt.Errorf("azure client api-key reached the provider")
-	}
-	if len(observed.Body["model"]) == 0 || !strings.Contains(string(raw), "Azure ingress probe") {
-		return fmt.Errorf("azure deployment did not select and dispatch the model: %s", truncateString(string(raw), 500))
-	}
-	unsupported, unsupportedErr := sendProtocolMatrixRaw(ctx, session,
-		"/openai/deployments/"+chatBackendModel+"/embeddings?api-version=2024-10-21",
-		map[string]any{"input": "Azure ingress probe"}, false, nil)
-	if unsupportedErr != nil {
-		return unsupportedErr
-	}
-	if unsupported.StatusCode != http.StatusNotFound {
-		return fmt.Errorf("unsupported Azure deployment operation returned HTTP %d, want 404", unsupported.StatusCode)
+
+	for _, path := range []string{
+		"/openai/deployments/" + chatBackendModel + "/embeddings?api-version=2024-10-21",
+		"/openai/v1/embeddings", "/openai/v1/responses/resp_123",
+	} {
+		unsupported, unsupportedErr := sendProtocolMatrixRaw(ctx, session, path,
+			map[string]any{"input": "Azure unsupported operation"}, false, nil)
+		if unsupportedErr != nil {
+			return fmt.Errorf("unsupported Azure request %s: %w", path, unsupportedErr)
+		}
+		if unsupported.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("unsupported Azure operation %s returned HTTP %d, want 404", path, unsupported.StatusCode)
+		}
 	}
 	return nil
 }
