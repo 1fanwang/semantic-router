@@ -219,7 +219,7 @@ func RejectRevokedMutation(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	if err := RevalidateRequest(r); err != nil {
-		writeRouteAuthError(w, err)
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return true
 	}
 	return false

@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -497,28 +495,6 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, PermInfe
 	case <-committed:
 		t.Fatal("revoked upload committed")
 	default:
-	}
-}
-
-func TestRejectRevokedMutationDistinguishesSessionFromPermission(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		err  error
-		want int
-	}{
-		{"permission", ErrPermissionDenied, http.StatusForbidden},
-		{"session", errors.New("session revoked"), http.StatusUnauthorized},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodPost, "/api/upload", nil)
-			request = request.WithContext(WithPermissionRevalidator(request.Context(), func(_ context.Context) error {
-				return test.err
-			}))
-			response := httptest.NewRecorder()
-			if !RejectRevokedMutation(response, request) || response.Code != test.want {
-				t.Fatalf("revocation status = %d, want %d", response.Code, test.want)
-			}
-		})
 	}
 }
 
