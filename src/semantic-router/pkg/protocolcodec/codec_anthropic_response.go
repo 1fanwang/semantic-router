@@ -20,6 +20,8 @@ type anthropicResponseWire struct {
 	Container         json.RawMessage     `json:"container"`
 	StopDetails       json.RawMessage     `json:"stop_details"`
 	ContextManagement json.RawMessage     `json:"context_management,omitempty"`
+	// Anthropic reports prompt-cache miss reasons here, and null when none were requested.
+	Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
 }
 
 type anthropicUsageWire struct {
@@ -91,6 +93,9 @@ func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llm
 	}
 	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "context_management", "applied context edits have no protocol-neutral representation")
+	}
+	if len(wire.Diagnostics) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Diagnostics), []byte("null")) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "diagnostics", "prompt-cache miss diagnostics have no protocol-neutral representation")
 	}
 	return diagnostics
 }

@@ -480,6 +480,7 @@
         "container",
         "content",
         "context_management",
+        "diagnostics",
         "id",
         "model",
         "role",
