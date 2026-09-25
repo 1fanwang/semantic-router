@@ -35,16 +35,24 @@ func TestOpenRouterBufferedReplyTranslatesAcrossClientFormats(t *testing.T) {
 				*result.Response.Usage.Total.Value != 13 {
 				t.Fatalf("translated response = %+v", result.Response)
 			}
-			for _, forbidden := range []string{`"provider":`, `"native_finish_reason":`, `"cost":`, `"is_byok":`, `"cost_details":`, `"server_tool_use":`, `"video_tokens":`, `"image_tokens":`} {
+			forbiddenFields := []string{`"provider":`, `"native_finish_reason":`, `"cost":`, `"is_byok":`, `"cost_details":`, `"video_tokens":`, `"image_tokens":`}
+			if target != llmprotocol.AnthropicMessagesV1 {
+				forbiddenFields = append(forbiddenFields, `"server_tool_use":`)
+			}
+			for _, forbidden := range forbiddenFields {
 				if bytes.Contains(result.Body, []byte(forbidden)) {
 					t.Errorf("public %s reply leaked %s: %s", target, forbidden, result.Body)
 				}
 			}
-			assertDiagnosticFields(t, result.Diagnostics,
+			expectedDiagnostics := []string{
 				"provider", "choices.native_finish_reason", "usage.cost", "usage.is_byok",
 				"usage.cost_details", "usage.server_tool_use", "usage.prompt_tokens_details.video_tokens",
 				"usage.completion_tokens_details.image_tokens",
-			)
+			}
+			if target == llmprotocol.AnthropicMessagesV1 {
+				expectedDiagnostics = append(expectedDiagnostics, "usage.cache")
+			}
+			assertDiagnosticFields(t, result.Diagnostics, expectedDiagnostics...)
 		})
 	}
 }
@@ -86,7 +94,11 @@ func TestOpenRouterStreamRepeatFinishTranslatesAcrossClientFormats(t *testing.T)
 			completionCount := 0
 			itemCompletionCount := 0
 			for _, chunk := range fixture.Chunks {
-				frames, events, observed, pushErr := stream.Push(append(append([]byte("data: "), chunk...), []byte("\n\n")...))
+				var compact bytes.Buffer
+				if err := json.Compact(&compact, chunk); err != nil {
+					t.Fatal(err)
+				}
+				frames, events, observed, pushErr := stream.Push(append(append([]byte("data: "), compact.Bytes()...), []byte("\n\n")...))
 				if pushErr != nil {
 					t.Fatalf("Push() error = %v", pushErr)
 				}
@@ -131,11 +143,15 @@ func TestOpenRouterStreamRepeatFinishTranslatesAcrossClientFormats(t *testing.T)
 					t.Errorf("public %s stream leaked %s: %s", target, forbidden, public)
 				}
 			}
-			assertDiagnosticFields(t, diagnostics,
+			expectedDiagnostics := []string{
 				"stream.provider", "stream.choices.native_finish_reason", "stream.usage.cost",
 				"stream.usage.is_byok", "stream.usage.cost_details", "stream.usage.server_tool_use",
 				"stream.usage.prompt_tokens_details.video_tokens", "stream.usage.completion_tokens_details.image_tokens",
-			)
+			}
+			if target == llmprotocol.AnthropicMessagesV1 {
+				expectedDiagnostics = append(expectedDiagnostics, "usage.cache")
+			}
+			assertDiagnosticFields(t, diagnostics, expectedDiagnostics...)
 		})
 	}
 }

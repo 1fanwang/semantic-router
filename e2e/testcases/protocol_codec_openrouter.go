@@ -56,18 +56,41 @@ func testProtocolCodecOpenRouterReply(ctx context.Context, client *kubernetes.Cl
 				if err := clientContract.validateStream(result.Body, openRouterReplyAnswer); err != nil {
 					return fmt.Errorf("%s stream: %w", cell, err)
 				}
+				text, err := extractProtocolStructuredOutputStreamText(clientContract.path, result.Body)
+				if err != nil {
+					return fmt.Errorf("%s stream text: %w", cell, err)
+				}
+				if text != openRouterReplyAnswer {
+					return fmt.Errorf("%s duplicated or changed output after repeated terminal chunks: %q", cell, text)
+				}
+				if clientContract.path == "/v1/chat/completions" &&
+					(strings.Count(string(result.Body), `"finish_reason":"stop"`) != 1 ||
+						strings.Count(string(result.Body), "data: [DONE]") != 1) {
+					return fmt.Errorf("%s emitted repeated Chat terminal chunks: %s", cell, truncateString(string(result.Body), 600))
+				}
 			} else {
 				if err := clientContract.validateBuffered(result.Body, openRouterReplyAnswer); err != nil {
 					return fmt.Errorf("%s response: %w", cell, err)
 				}
 				warnings := result.Headers.Get("x-vsr-protocol-warnings")
-				for _, field := range []string{"provider", "choices.native_finish_reason", "usage.cost"} {
+				for _, field := range []string{
+					"provider", "choices.native_finish_reason", "usage.cost", "usage.is_byok",
+					"usage.cost_details", "usage.server_tool_use", "usage.prompt_tokens_details.video_tokens",
+					"usage.completion_tokens_details.image_tokens",
+				} {
 					if !hasProtocolFieldDiagnostic(warnings, "dropped", field) {
 						return fmt.Errorf("%s omitted %s without a diagnostic: %q", cell, field, warnings)
 					}
 				}
 			}
-			for _, field := range []string{`"provider":`, `"native_finish_reason":`, `"cost_details":`, `"is_byok":`} {
+			forbiddenFields := []string{
+				`"provider":`, `"native_finish_reason":`, `"cost":`, `"cost_details":`, `"is_byok":`,
+				`"video_tokens":`, `"image_tokens":`,
+			}
+			if clientContract.path != "/v1/messages" {
+				forbiddenFields = append(forbiddenFields, `"server_tool_use":`)
+			}
+			for _, field := range forbiddenFields {
 				if strings.Contains(string(result.Body), field) {
 					return fmt.Errorf("%s leaked OpenRouter-only field %s: %s", cell, field, truncateString(string(result.Body), 600))
 				}

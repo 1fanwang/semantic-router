@@ -494,6 +494,9 @@ func decodeAnthropicMessage(wire anthropicMessageWire, policy llmprotocol.Policy
 		}
 		result[0].ReasoningEffort = effort
 	}
+	if len(result) == 0 {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "empty_message", "messages must contain at least one content block", nil)
+	}
 	return result, nil
 }
 
