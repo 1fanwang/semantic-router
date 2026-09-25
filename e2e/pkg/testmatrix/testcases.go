@@ -23,6 +23,7 @@ var BaselineRouterContract = []string{
 	"semantic-cache",
 	// NLI polarity tier of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
+	"exact-cache-multilingual-negation",
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
