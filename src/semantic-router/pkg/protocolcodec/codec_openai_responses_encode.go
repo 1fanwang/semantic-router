@@ -212,7 +212,7 @@ func (state *responsesMessageEncodingState) appendGeneratedImage(image *llmproto
 	}
 	item := responsesItemWire{
 		Type:   "image_generation_call",
-		ID:     responsesItemID(state.messageID, len(state.items), "image_generation_call"),
+		ID:     state.itemID("image_generation_call"),
 		Status: string(image.Status),
 	}
 	if image.Result != nil {
@@ -232,7 +232,7 @@ func (state *responsesMessageEncodingState) flushOrdinary() error {
 		return err
 	}
 	item := responsesItemWire{
-		Type: "message", ID: responsesItemID(state.messageID, len(state.items), "message"),
+		Type: "message", ID: state.itemID("message"),
 		Role: state.role, Content: content,
 	}
 	if state.textDirection == "output" {
@@ -248,7 +248,7 @@ func (state *responsesMessageEncodingState) appendToolCall(call *llmprotocol.Too
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_call", "tool call is invalid", nil)
 	}
 	state.items = append(state.items, responsesItemWire{
-		Type: "function_call", ID: responsesItemID(state.messageID, len(state.items), "function_call"),
+		Type: "function_call", ID: state.itemID("function_call"),
 		CallID: call.ID, Name: call.Name, Arguments: call.Arguments,
 	})
 	return nil
@@ -263,7 +263,7 @@ func (state *responsesMessageEncodingState) appendToolResult(result *llmprotocol
 		return err
 	}
 	state.items = append(state.items, responsesItemWire{
-		Type: "function_call_output", ID: responsesItemID(state.messageID, len(state.items), "function_call_output"),
+		Type: "function_call_output", ID: state.itemID("function_call_output"),
 		CallID: result.CallID, Output: output,
 	})
 	return nil
@@ -274,7 +274,7 @@ func (state *responsesMessageEncodingState) flushReasoning() error {
 		return nil
 	}
 	item := responsesItemWire{
-		Type: "reasoning", ID: responsesItemID(state.messageID, len(state.items), "reasoning"),
+		Type: "reasoning", ID: state.itemID("reasoning"),
 	}
 	summaries := make([]map[string]string, 0, len(state.reasoning))
 	texts := make([]map[string]string, 0, len(state.reasoning))
@@ -299,6 +299,18 @@ func (state *responsesMessageEncodingState) flushReasoning() error {
 	state.items = append(state.items, item)
 	state.reasoning = nil
 	return nil
+}
+
+// itemID keeps an input item's source id and invents none: OpenAI checks input
+// ids against the item type, so a generated one fails the request.
+func (state *responsesMessageEncodingState) itemID(kind string) string {
+	if state.textDirection != "input" {
+		return responsesItemID(state.messageID, len(state.items), kind)
+	}
+	if len(state.items) == 0 {
+		return state.messageID
+	}
+	return ""
 }
 
 func responsesItemID(messageID string, index int, kind string) string {
