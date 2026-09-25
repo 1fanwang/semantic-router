@@ -145,8 +145,8 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			),
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
-				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
-				"remote_host", "remote_port", "usage_breakdown", "x_groq",
+				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "provider", "remote_block_ids",
+				"remote_engine_id", "remote_host", "remote_port", "usage_breakdown", "x_groq",
 			),
 		},
 		{
@@ -198,9 +198,10 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 				"completion_tokens", "completion_tokens_details", "compute_units", "prompt_tokens",
 				"prompt_tokens_details", "total_tokens",
 			),
-			// xAI and Groq accounting fields on their OpenAI-compatible endpoints.
+			// xAI, Groq and OpenRouter accounting fields on their OpenAI-compatible endpoints.
 			extensions: fields(
-				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "service_tier", "total_time",
+				"completion_time", "cost", "cost_details", "cost_in_usd_ticks", "is_byok", "num_sources_used", "prompt_time",
+				"queue_time", "service_tier", "total_time",
 			),
 		},
 		{

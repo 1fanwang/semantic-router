@@ -31,6 +31,14 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
 	}, "response request metadata is not model output")
+	if wire.Provider != nil {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIChatV1, "provider", gatewayProviderOmissionReason)
+	}
+	if chatChoicesHaveNativeFinishReason(wire.Choices) {
+		appendProviderFieldOmission(
+			&diagnostics, policy, llmprotocol.OpenAIChatV1, "choices.native_finish_reason", nativeFinishReasonOmissionReason,
+		)
+	}
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
@@ -42,6 +50,20 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// would re-emit what the decode just dropped.
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
 	return response, envelope, diagnostics, nil
+}
+
+const (
+	gatewayProviderOmissionReason    = "gateway routing metadata is not model output"
+	nativeFinishReasonOmissionReason = "the normalized finish_reason carries the stop reason"
+)
+
+func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if choice.NativeFinishReason != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func chatChoicesHaveTokenizedArguments(choices []chatChoiceWire) bool {
@@ -110,6 +132,11 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "prompt_time":                                          wire.PromptTime != nil,
 		prefix + "completion_time":                                      wire.CompletionTime != nil,
 		prefix + "total_time":                                           wire.TotalTime != nil,
+		prefix + "cost":                                                 wire.Cost != nil,
+		prefix + "is_byok":                                              wire.IsBYOK != nil && *wire.IsBYOK,
+		prefix + "cost_details":                                         wire.CostDetails != nil,
+		prefix + "prompt_tokens_details.video_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.VideoTokens != 0,
+		prefix + "completion_tokens_details.image_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.ImageTokens != 0,
 	}
 }
 

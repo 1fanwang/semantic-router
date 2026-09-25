@@ -66,11 +66,22 @@ type chatChunkWire struct {
 	// Aggregator gateways may report the handling agent alongside a chunk.
 	// It is transport metadata, not response content.
 	Agent json.RawMessage `json:"agent,omitempty"`
+	// OpenRouter names the upstream provider on every chunk.
+	Provider *string `json:"provider,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
 	return wire.DoRemoteDecode != nil || wire.DoRemotePrefill != nil || wire.RemoteBlockIDs != nil ||
 		wire.RemoteEngineID != nil || wire.RemoteHost != nil || wire.RemotePort != nil
+}
+
+func chatChunkHasNativeFinishReason(wire chatChunkWire) bool {
+	for _, choice := range wire.Choices {
+		if choice.NativeFinishReason != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (wire chatChunkWire) hasTokenizedToolArguments() bool {
@@ -92,6 +103,8 @@ type chatChunkChoiceWire struct {
 	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs      []int64             `json:"token_ids,omitempty"`
 	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	// OpenRouter repeats the upstream provider's raw reason beside the normalized finish_reason.
+	NativeFinishReason *string `json:"native_finish_reason,omitempty"`
 }
 
 type chatChunkDeltaWire struct {
@@ -203,6 +216,15 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"stream.agent", "gateway agent metadata is not model output",
 		)
 	}
+	// OpenRouter repeats the provider on every chunk; one omission per stream is enough.
+	if chunk.Provider != nil {
+		decoder.appendProviderFieldOmissionOnce(&diagnostics, llmprotocol.OpenAIChatV1, "stream.provider", gatewayProviderOmissionReason)
+	}
+	if chatChunkHasNativeFinishReason(chunk) {
+		decoder.appendProviderFieldOmissionOnce(
+			&diagnostics, llmprotocol.OpenAIChatV1, "stream.choices.native_finish_reason", nativeFinishReasonOmissionReason,
+		)
+	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
@@ -216,6 +238,21 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		)
 	}
 	return diagnostics
+}
+
+func (state *streamState) appendProviderFieldOmissionOnce(
+	diagnostics *llmprotocol.Diagnostics,
+	source llmprotocol.WireFormat,
+	field, reason string,
+) {
+	if state.reportedOmissions[field] {
+		return
+	}
+	if state.reportedOmissions == nil {
+		state.reportedOmissions = make(map[string]bool)
+	}
+	state.reportedOmissions[field] = true
+	appendProviderFieldOmission(diagnostics, state.policy, source, field, reason)
 }
 
 // isGatewayChatKeepalive recognizes only the empty chunk shape used by
@@ -324,6 +361,9 @@ func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]ll
 	if choice.Index != 0 {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "stream_multiple_choices", "streaming multiple choices is unsupported", nil)
 	}
+	if decoder.repeatsFinishedChoice(choice) {
+		return nil, nil
+	}
 	events, err := decoder.decodeChoiceTextEvents(choice)
 	if err != nil {
 		return nil, err
@@ -335,6 +375,18 @@ func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]ll
 	events = append(events, toolEvents...)
 	completed, err := decoder.completeChoice(choice.FinishReason)
 	return append(events, completed...), err
+}
+
+// OpenRouter's final usage chunk repeats the finish_reason with a content-free
+// delta after the choice has finished; it carries nothing to decode.
+func (decoder *chatStreamDecoder) repeatsFinishedChoice(choice chatChunkChoiceWire) bool {
+	if choice.FinishReason == nil || decoder.stop == "" || decodeChatStop(*choice.FinishReason) != decoder.stop {
+		return false
+	}
+	delta := choice.Delta
+	return (delta.Content == nil || *delta.Content == "") && delta.Reasoning == nil && delta.AlternateReasoning == nil &&
+		delta.Refusal == nil && delta.Audio == nil && delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 &&
+		len(delta.Annotations) == 0 && choice.Logprobs == nil
 }
 
 func (decoder *chatStreamDecoder) decodeChoiceTextEvents(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {

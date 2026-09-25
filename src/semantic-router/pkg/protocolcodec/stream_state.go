@@ -38,6 +38,7 @@ type streamState struct {
 	imageProgressRank     map[int]int
 	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
 	nextPartialImageIndex map[int]int64
+	reportedOmissions     map[string]bool
 }
 
 func (state *streamState) observeProviderStreamBytes(chunk []byte) error {
