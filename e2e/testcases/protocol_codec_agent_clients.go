@@ -18,6 +18,68 @@ func init() {
 		Tags:        []string{"protocol-codec", "response-api", "agents", "tools"},
 		Fn:          testProtocolCodecAgentClientFields,
 	})
+	pkgtestcases.Register("protocol-codec-azure-ingress", pkgtestcases.TestCase{
+		Description: "Azure deployment paths select the model and strip the client API key before Chat dispatch",
+		Tags:        []string{"protocol-codec", "azure", "agents", "security"},
+		Fn:          testProtocolCodecAzureIngress,
+	})
+}
+
+func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	provider, err := openProtocolCodecProviderSession(ctx, client, opts, "openai.chat.v1")
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	const sessionID = "azure-ingress-codec-e2e"
+	path := "/openai/deployments/" + chatBackendModel + "/chat/completions?api-version=2024-10-21"
+	result, err := sendProtocolMatrixRaw(ctx, session, path, map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": "Azure ingress probe"}},
+	}, false, map[string]string{
+		"api-key": "azure-client-test-key", "x-vsr-test-session-id": sessionID,
+	})
+	if err != nil {
+		return err
+	}
+	if result.StatusCode != http.StatusOK {
+		return fmt.Errorf("Azure deployment Chat returned HTTP %d: %s", result.StatusCode, truncateString(string(result.Body), 500))
+	}
+	if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
+		return err
+	}
+	raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
+	if err != nil {
+		return err
+	}
+	var observed struct {
+		Body          map[string]json.RawMessage `json:"body"`
+		APIKeyPresent bool                       `json:"api_key_present"`
+	}
+	if err := json.Unmarshal(raw, &observed); err != nil {
+		return err
+	}
+	if observed.APIKeyPresent {
+		return fmt.Errorf("Azure client api-key reached the provider")
+	}
+	if len(observed.Body["model"]) == 0 || !strings.Contains(string(raw), "Azure ingress probe") {
+		return fmt.Errorf("Azure deployment did not select and dispatch the model: %s", truncateString(string(raw), 500))
+	}
+	unsupported, err := sendProtocolMatrixRaw(ctx, session,
+		"/openai/deployments/"+chatBackendModel+"/embeddings?api-version=2024-10-21",
+		map[string]any{"input": "Azure ingress probe"}, false, nil)
+	if err != nil {
+		return err
+	}
+	if unsupported.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("unsupported Azure deployment operation returned HTTP %d, want 404", unsupported.StatusCode)
+	}
+	return nil
 }
 
 func testProtocolCodecAgentClientFields(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

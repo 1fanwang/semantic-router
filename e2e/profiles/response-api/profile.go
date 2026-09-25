@@ -91,6 +91,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-chat-backend-midstream-error-matrix",
 		"protocol-codec-responses-backend-midstream-error-matrix",
 		"protocol-codec-agent-client-fields",
+		"protocol-codec-azure-ingress",
 	}
 }
 

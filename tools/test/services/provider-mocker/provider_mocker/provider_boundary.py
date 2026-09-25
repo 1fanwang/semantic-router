@@ -46,6 +46,11 @@ class RequestStore:
             "body": deepcopy(body),
             "body_sha256": hashlib.sha256(raw_body).hexdigest(),
             "body_bytes": len(raw_body),
+            # Expose only presence, never the client credential itself. Azure
+            # ingress E2E uses this to catch a key leaking to the provider.
+            "api_key_present": any(
+                name.lower() == "api-key" for name in (headers or {})
+            ),
             "headers": observed_headers,
             "header_values": header_values,
         }
