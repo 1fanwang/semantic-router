@@ -61,6 +61,12 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	for _, message := range request.Messages {
+		if message.ReasoningEffort != "" {
+			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
+				"messages[].output_config.effort", "Chat Completions cannot apply Anthropic per-message effort")
+		}
+	}
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Chat Completions cannot request a reasoning summary")
 	}
@@ -111,6 +117,9 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 		wire.Messages = append(wire.Messages, encoded)
 	}
 	for _, message := range request.Messages {
+		if len(message.Content) == 0 && message.ReasoningEffort != "" {
+			continue
+		}
 		encoded, err := encodeChatMessage(message)
 		if err != nil {
 			return err

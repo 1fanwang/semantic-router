@@ -239,6 +239,16 @@ def build_responses_response(body: dict[str, Any]) -> tuple[dict[str, Any], str]
         "output_text": output,
         "usage": build_responses_usage(body, output),
     }
+    if response_input_contains(body, "__mock_responses_decorations__"):
+        response.update(
+            {
+                "access_programs": None,
+                "billing": {"payer": "openai"},
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0,
+                "tool_usage": {"web_search": {"num_requests": 0}},
+            }
+        )
     return response, item_id
 
 

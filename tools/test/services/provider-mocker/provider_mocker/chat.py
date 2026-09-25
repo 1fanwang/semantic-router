@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from . import ollama_fixture, workflow_chat
+from . import ollama_fixture, openrouter_fixture, workflow_chat
 from .chat_request import ChatRequest, build_chat_content
 from .chat_wire import (
     build_chat_response,
@@ -114,6 +114,14 @@ async def chat_completions(request: Request):
     scenario_response = await respond_to_scenario(request, req, created_ts)
     if scenario_response is not None:
         return scenario_response
+    if chat_contains(req, openrouter_fixture.MARKER):
+        if req.stream:
+            return StreamingResponse(
+                openrouter_fixture.streamed_reply(req, created_ts),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+        return openrouter_fixture.buffered_reply(req, created_ts)
     if req.tools and chat_contains(req, ollama_fixture.MARKER):
         if req.stream:
             return StreamingResponse(

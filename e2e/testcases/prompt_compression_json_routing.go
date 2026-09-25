@@ -61,8 +61,10 @@ func testPromptCompressionJSONRouting(
 	if assertionErr := assertJSONPromptCompressionRoute(ctx, router, provider, longPrompt, jsonPromptFallbackDecision); assertionErr != nil {
 		return fmt.Errorf("dense JSON prompt: %w", assertionErr)
 	}
-	codeStatement := `if(item.tag==="` + jsonPromptMarker + `"){handle(item);};`
-	codePrompt := "Inspect the code. " + strings.Repeat(codeStatement, 120) + " Give a count."
+	// Keep the minified expression in one sentence. Semicolons split it into
+	// small chunks that the compressor can legitimately retain.
+	codeTerm := `item["tag"]==="` + jsonPromptMarker + `"&&handle(item),`
+	codePrompt := "Inspect the code. const flags=[" + strings.Repeat(codeTerm, 150) + "] Give a count."
 	if len(codePrompt) <= 4096 {
 		return fmt.Errorf("code fixture is only %d bytes; it must cross the configured min_length", len(codePrompt))
 	}
@@ -89,7 +91,7 @@ func assertJSONPromptCompressionRoute(
 ) error {
 	sessionID := fmt.Sprintf("json-compression-%d", time.Now().UnixNano())
 	response, err := sendProtocolMatrixRaw(ctx, router, "/v1/chat/completions", map[string]any{
-		"model":      "MoM",
+		"model":      "auto",
 		"max_tokens": 32,
 		"messages":   []map[string]string{{"role": "user", "content": prompt}},
 	}, false, map[string]string{

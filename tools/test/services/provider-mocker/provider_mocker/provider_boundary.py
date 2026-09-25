@@ -37,8 +37,13 @@ class RequestStore:
         header_values: dict[str, list[str]] = {}
         for name, value in (headers or {}).items():
             normalized = name.lower()
-            if normalized == SESSION_HEADER or normalized.startswith(
-                _OBSERVED_HEADER_PREFIX
+            if (
+                normalized == SESSION_HEADER
+                or normalized.startswith(_OBSERVED_HEADER_PREFIX)
+                or (
+                    normalized == "anthropic-beta"
+                    and session_id.startswith("anthropic-per-message-effort-")
+                )
             ):
                 observed_headers[normalized] = value
                 header_values.setdefault(normalized, []).append(value)

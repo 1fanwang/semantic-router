@@ -103,9 +103,10 @@ type Citation struct {
 }
 
 type Message struct {
-	ID      string
-	Role    Role
-	Content []Content
+	ID              string
+	Role            Role
+	Content         []Content
+	ReasoningEffort string // Anthropic per-message output_config.effort.
 }
 
 type InstructionBlock struct {
