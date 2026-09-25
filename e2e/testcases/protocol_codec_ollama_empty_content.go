@@ -62,18 +62,18 @@ func testProtocolCodecOllamaEmptyContent(ctx context.Context, client *kubernetes
 			Input                          json.RawMessage `json:"input"`
 		} `json:"content"`
 	}
-	if err := json.Unmarshal(messagesResult.Body, &message); err != nil {
-		return fmt.Errorf("decode buffered Ollama Messages response: %w", err)
+	if decodeErr := json.Unmarshal(messagesResult.Body, &message); decodeErr != nil {
+		return fmt.Errorf("decode buffered Ollama Messages response: %w", decodeErr)
 	}
 	if message.StopReason != "tool_use" || len(message.Content) != 2 ||
 		message.Content[0].Type != "thinking" || message.Content[0].Thinking == "" ||
 		message.Content[1].Type != "tool_use" || message.Content[1].ID != "call_mock_lookup" ||
 		message.Content[1].Name != "lookup" || string(message.Content[1].Input) != `{"query":"weather"}` {
-		return fmt.Errorf("Ollama empty content displaced thinking or tool use: %s",
+		return fmt.Errorf("ollama empty content displaced thinking or tool use: %s",
 			truncateString(string(messagesResult.Body), 900))
 	}
-	if err := verifyProviderSimulatorRequest(ctx, provider, messagesID, "openai.chat.v1", ollamaEmptyContentMarker); err != nil {
-		return fmt.Errorf("buffered Ollama provider dispatch: %w", err)
+	if verificationErr := verifyProviderSimulatorRequest(ctx, provider, messagesID, "openai.chat.v1", ollamaEmptyContentMarker); verificationErr != nil {
+		return fmt.Errorf("buffered Ollama provider dispatch: %w", verificationErr)
 	}
 
 	// Ollama also emits content="" in streamed tool deltas. Responses must
@@ -98,8 +98,8 @@ func testProtocolCodecOllamaEmptyContent(ctx context.Context, client *kubernetes
 		return fmt.Errorf("streamed Ollama tool call produced an empty text item: %s",
 			truncateString(string(responsesResult.Body), 1000))
 	}
-	if err := verifyProviderSimulatorRequest(ctx, provider, responsesID, "openai.chat.v1", ollamaEmptyContentMarker); err != nil {
-		return fmt.Errorf("streamed Ollama provider dispatch: %w", err)
+	if verificationErr := verifyProviderSimulatorRequest(ctx, provider, responsesID, "openai.chat.v1", ollamaEmptyContentMarker); verificationErr != nil {
+		return fmt.Errorf("streamed Ollama provider dispatch: %w", verificationErr)
 	}
 	return nil
 }

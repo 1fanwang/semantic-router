@@ -82,8 +82,8 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 			return fmt.Errorf("%s output limit returned HTTP %d: %s", check.name, result.StatusCode,
 				truncateString(string(result.Body), 500))
 		}
-		if err := check.assert(result.Body, `"protocol":"chat_completions"`); err != nil {
-			return fmt.Errorf("%s output limit response: %w", check.name, err)
+		if assertionErr := check.assert(result.Body, `"protocol":"chat_completions"`); assertionErr != nil {
+			return fmt.Errorf("%s output limit response: %w", check.name, assertionErr)
 		}
 		observed, observationErr := lastProviderSimulatorRequest(ctx, provider, sessionID)
 		if observationErr != nil {
@@ -92,8 +92,8 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 		var receipt struct {
 			Body map[string]json.RawMessage `json:"body"`
 		}
-		if err := json.Unmarshal(observed, &receipt); err != nil {
-			return fmt.Errorf("decode %s Ollama provider observation: %w", check.name, err)
+		if decodeErr := json.Unmarshal(observed, &receipt); decodeErr != nil {
+			return fmt.Errorf("decode %s Ollama provider observation: %w", check.name, decodeErr)
 		}
 		if string(receipt.Body["max_tokens"]) != "8" || string(receipt.Body["model"]) != `"`+ollamaCodecModel+`"` {
 			return fmt.Errorf("%s Ollama provider lost the model or output limit: %s", check.name,
@@ -127,8 +127,8 @@ func testProtocolCodecOllamaOutputLimit(ctx context.Context, client *kubernetes.
 	var receipt struct {
 		Body map[string]json.RawMessage `json:"body"`
 	}
-	if err := json.Unmarshal(observed, &receipt); err != nil {
-		return fmt.Errorf("decode ordinary Chat provider observation: %w", err)
+	if decodeErr := json.Unmarshal(observed, &receipt); decodeErr != nil {
+		return fmt.Errorf("decode ordinary Chat provider observation: %w", decodeErr)
 	}
 	if string(receipt.Body["max_completion_tokens"]) != "8" ||
 		!strings.Contains(string(observed), controlPrompt) {
@@ -168,11 +168,11 @@ func testProtocolCodecAutoUnsupportedCapability(ctx context.Context, client *kub
 		return fmt.Errorf("auto capability control returned HTTP %d: %s", control.StatusCode,
 			truncateString(string(control.Body), 500))
 	}
-	if err := assertAnthropicBody(control.Body, `"protocol":"chat_completions"`); err != nil {
-		return fmt.Errorf("auto capability control response: %w", err)
+	if assertionErr := assertAnthropicBody(control.Body, `"protocol":"chat_completions"`); assertionErr != nil {
+		return fmt.Errorf("auto capability control response: %w", assertionErr)
 	}
-	if err := verifyProviderSimulatorRequest(ctx, provider, controlID, "openai.chat.v1", prompt); err != nil {
-		return fmt.Errorf("auto capability control provider dispatch: %w", err)
+	if verificationErr := verifyProviderSimulatorRequest(ctx, provider, controlID, "openai.chat.v1", prompt); verificationErr != nil {
+		return fmt.Errorf("auto capability control provider dispatch: %w", verificationErr)
 	}
 
 	for _, check := range []struct {
@@ -192,14 +192,15 @@ func testProtocolCodecAutoUnsupportedCapability(ctx context.Context, client *kub
 				result.StatusCode, truncateString(string(result.Body), 500))
 		}
 		var response struct {
+			Type  string `json:"type"`
 			Error struct {
-				Type, Code, Message string
+				Type, Message string
 			} `json:"error"`
 		}
-		if err := json.Unmarshal(result.Body, &response); err != nil {
-			return fmt.Errorf("decode %s disabled-thinking error: %w", check.name, err)
+		if decodeErr := json.Unmarshal(result.Body, &response); decodeErr != nil {
+			return fmt.Errorf("decode %s disabled-thinking error: %w", check.name, decodeErr)
 		}
-		if response.Error.Type != "invalid_request_error" || response.Error.Code != "unsupported_capability" ||
+		if response.Type != "error" || response.Error.Type != "invalid_request_error" ||
 			!strings.Contains(response.Error.Message, "reasoning-off control") {
 			return fmt.Errorf("%s disabled-thinking request returned the wrong capability error: %s", check.name,
 				truncateString(string(result.Body), 500))
