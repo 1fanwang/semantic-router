@@ -96,6 +96,9 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-agent-client-fields",
 		"protocol-codec-azure-ingress",
 		"protocol-codec-reasoning-summary-responses-backend",
+		"protocol-codec-ollama-output-limit",
+		"protocol-codec-ollama-empty-content",
+		"protocol-codec-auto-unsupported-capability",
 	}
 }
 

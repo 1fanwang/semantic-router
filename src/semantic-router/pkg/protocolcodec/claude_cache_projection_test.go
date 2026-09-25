@@ -36,10 +36,10 @@ func TestClaudeToolResultOuterCacheProjectsToChatLastText(t *testing.T) {
 	if err := json.Unmarshal(result.Body, &wire); err != nil {
 		t.Fatal(err)
 	}
-	if len(wire.Messages) != 3 {
-		t.Fatalf("Chat messages = %d, want three: %s", len(wire.Messages), result.Body)
+	if len(wire.Messages) != 4 {
+		t.Fatalf("Chat messages = %d, want four: %s", len(wire.Messages), result.Body)
 	}
-	toolResult := wire.Messages[2]
+	toolResult := wire.Messages[3]
 	if toolResult.Role != "tool" || toolResult.ToolCallID != "call-1" {
 		t.Fatalf("tool result identity lost: %+v", toolResult)
 	}

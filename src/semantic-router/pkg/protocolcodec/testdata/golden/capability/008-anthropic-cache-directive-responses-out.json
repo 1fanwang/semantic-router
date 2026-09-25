@@ -1,7 +1,47 @@
 {
-  "status": "error",
-  "error": {
-    "category": "unsupported_feature",
-    "code": "unsupported_capability"
-  }
+  "status": "ok",
+  "body": {
+    "input": [
+      {
+        "content": [
+          {
+            "text": "Stable instructions",
+            "type": "input_text"
+          }
+        ],
+        "id": "item_6a32e29c376158d871e9638e",
+        "role": "system",
+        "type": "message"
+      },
+      {
+        "content": [
+          {
+            "text": "Hello",
+            "type": "input_text"
+          }
+        ],
+        "id": "item_6a32e29c376158d871e9638e",
+        "role": "user",
+        "type": "message"
+      }
+    ],
+    "max_output_tokens": 32,
+    "model": "routed-model",
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "name": "lookup",
+        "parameters": {
+          "type": "object"
+        },
+        "type": "function"
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "field": "cache_control",
+      "action": "dropped"
+    }
+  ]
 }

@@ -11,13 +11,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// Claude Code sends adaptive thinking with a display setting on every request,
-// which only the Messages codec can express.
-func claudeCodeThinkingRequest(model string) *llmprotocol.Request {
+// Explicitly disabling reasoning needs a configured backend off control;
+// unannotated Chat candidates cannot promise that semantic behavior.
+func unsupportedThinkingRequest(model string) *llmprotocol.Request {
 	request := testNeutralRequest(model, "Create hello.txt containing hi.")
-	request.ReasoningMode = llmprotocol.ReasoningModeAdaptive
-	request.ReasoningDisplay = "omitted"
-	request.ReasoningEffort = "medium"
+	request.ReasoningMode = llmprotocol.ReasoningModeDisabled
 	return request
 }
 
@@ -33,7 +31,7 @@ func TestAutoRoutingReportsUnsupportedCapabilityLikeNamedModel(t *testing.T) {
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
 
-	request := claudeCodeThinkingRequest("auto")
+	request := unsupportedThinkingRequest("auto")
 	ctx := &RequestContext{
 		RequestID: "capability-mismatch", RequestModel: "auto", TraceContext: context.Background(),
 		SemanticRequest: request, SourceFormat: llmprotocol.AnthropicMessagesV1,
@@ -44,11 +42,11 @@ func TestAutoRoutingReportsUnsupportedCapabilityLikeNamedModel(t *testing.T) {
 	}
 	autoError := ctx.ImmediateProtocolError
 	if autoError == nil || autoError.Category != llmprotocol.ErrorUnsupportedFeature ||
-		!strings.Contains(autoError.Message, "reasoning_adaptive") {
-		t.Fatalf("client error = %v, want the unsupported reasoning_adaptive capability", autoError)
+		!strings.Contains(autoError.Message, "reasoning-off control") {
+		t.Fatalf("client error = %v, want the unsupported reasoning-off control", autoError)
 	}
 
-	named := claudeCodeThinkingRequest(chatModel)
+	named := unsupportedThinkingRequest(chatModel)
 	_, err = router.prepareProviderDispatch(named, chatModel, "", false, routingTestContext(llmprotocol.AnthropicMessagesV1, named))
 	var namedError *llmprotocol.ProtocolError
 	if !errors.As(err, &namedError) || namedError.Message != autoError.Message {
@@ -77,7 +75,7 @@ func TestAutoRoutingKeepsMixedContextAndWireExclusionsUnavailable(t *testing.T) 
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
 
-	request := claudeCodeThinkingRequest("auto")
+	request := unsupportedThinkingRequest("auto")
 	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, request)
 	ctx.RequestModel = "auto"
 	_, response := router.runRequestPreRoutingStages("auto", extractSemanticRequestSignals(request), ctx)
