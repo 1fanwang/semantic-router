@@ -76,10 +76,35 @@
     {
       "name": "custom",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_tool"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "Use the selected tool.",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "description": "Run Python code.",
+              "format": {
+                "definition": "print\\(.+\\)",
+                "syntax": "regex",
+                "type": "grammar"
+              },
+              "name": "code_exec",
+              "type": "custom"
+            }
+          ]
         }
       }
     },

@@ -1,0 +1,16 @@
+{
+  "operation": "stream",
+  "cases": [
+    {
+      "name": "custom_tool_call_input_events",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_custom_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"status\":\"in_progress\",\"call_id\":\"call_1\",\"name\":\"apply_patch\",\"input\":\"\"}}\n\nevent: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"ctc_1\",\"delta\":\"*** Begin Patch\\n\"}\n\n",
+          "event: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"ctc_1\",\"delta\":\"*** Add File: hello.txt\\n+hi\\n*** End Patch\\n\"}\n\nevent: response.custom_tool_call_input.done\ndata: {\"type\":\"response.custom_tool_call_input.done\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"ctc_1\",\"input\":\"*** Begin Patch\\n*** Add File: hello.txt\\n+hi\\n*** End Patch\\n\"}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":5,\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"status\":\"completed\",\"call_id\":\"call_1\",\"name\":\"apply_patch\",\"input\":\"*** Begin Patch\\n*** Add File: hello.txt\\n+hi\\n*** End Patch\\n\"}}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":6,\"response\":{\"id\":\"resp_custom_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"completed\",\"output\":[{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"status\":\"completed\",\"call_id\":\"call_1\",\"name\":\"apply_patch\",\"input\":\"*** Begin Patch\\n*** Add File: hello.txt\\n+hi\\n*** End Patch\\n\"}],\"usage\":{\"input_tokens\":4,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":3,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":7}}}\n\n"
+        ]
+      }
+    }
+  ]
+}

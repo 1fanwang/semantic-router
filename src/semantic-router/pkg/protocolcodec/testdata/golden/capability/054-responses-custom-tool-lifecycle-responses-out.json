@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "name": "grammar_tool_call_and_result",
+      "name": "grammar_tool_call_and_output",
       "outcome": {
         "status": "ok",
         "body": {
@@ -80,6 +80,29 @@
               "type": "custom"
             }
           ]
+        }
+      }
+    },
+    {
+      "name": "retained_call_output",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "call_id": "call_1",
+              "id": "item_697b68832b4ca0479bb077a1",
+              "output": [
+                {
+                  "text": "Created hello.txt",
+                  "type": "input_text"
+                }
+              ],
+              "type": "custom_tool_call_output"
+            }
+          ],
+          "model": "routed-model",
+          "previous_response_id": "resp_previous_1"
         }
       }
     }

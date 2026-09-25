@@ -89,8 +89,9 @@ func encodeResponsesRequestItems(request llmprotocol.Request) ([]responsesItemWi
 		}
 		items = append(items, encoded...)
 	}
+	customCalls := customToolCallIDs(request.Messages)
 	for _, message := range request.Messages {
-		encoded, err := encodeResponsesMessage(message, "input")
+		encoded, err := encodeResponsesMessageItems(message, "input", customCalls)
 		if err != nil {
 			return nil, err
 		}
@@ -105,6 +106,10 @@ func encodeResponsesTools(input []llmprotocol.Tool, imageGeneration *llmprotocol
 	}
 	tools := make([]responsesToolWire, 0, len(input)+1)
 	for _, tool := range input {
+		if tool.Kind == llmprotocol.ToolKindCustom {
+			tools = append(tools, encodeResponsesCustomTool(tool))
+			continue
+		}
 		tools = append(tools, responsesToolWire{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict})
 	}
 	if imageGeneration != nil {
@@ -140,11 +145,21 @@ func encodeResponsesOutputFormat(output llmprotocol.OutputFormat) *responsesText
 }
 
 func encodeResponsesMessage(message llmprotocol.Message, textDirection string) ([]responsesItemWire, error) {
+	return encodeResponsesMessageItems(message, textDirection, nil)
+}
+
+func encodeResponsesMessageItems(
+	message llmprotocol.Message,
+	textDirection string,
+	customCalls map[string]struct{},
+) ([]responsesItemWire, error) {
 	role, err := wireRole(message.Role)
 	if err != nil {
 		return nil, err
 	}
-	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection}
+	state := responsesMessageEncodingState{
+		messageID: message.ID, role: role, textDirection: textDirection, customCalls: customCalls,
+	}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
 			return nil, err
@@ -163,9 +178,12 @@ type responsesMessageEncodingState struct {
 	messageID     string
 	role          string
 	textDirection string
-	ordinary      []llmprotocol.Content
-	reasoning     []llmprotocol.Content
-	items         []responsesItemWire
+	// customCalls names the calls whose results Responses requires as
+	// custom_tool_call_output items.
+	customCalls map[string]struct{}
+	ordinary    []llmprotocol.Content
+	reasoning   []llmprotocol.Content
+	items       []responsesItemWire
 }
 
 func (state *responsesMessageEncodingState) appendContent(content llmprotocol.Content) error {
@@ -247,6 +265,13 @@ func (state *responsesMessageEncodingState) appendToolCall(call *llmprotocol.Too
 	if call == nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_call", "tool call is invalid", nil)
 	}
+	if call.Kind == llmprotocol.ToolKindCustom {
+		state.items = append(state.items, responsesItemWire{
+			Type: "custom_tool_call", ID: responsesItemID(state.messageID, len(state.items), "custom_tool_call"),
+			CallID: call.ID, Name: call.Name, Input: call.Arguments,
+		})
+		return nil
+	}
 	state.items = append(state.items, responsesItemWire{
 		Type: "function_call", ID: responsesItemID(state.messageID, len(state.items), "function_call"),
 		CallID: call.ID, Name: call.Name, Arguments: call.Arguments,
@@ -262,8 +287,12 @@ func (state *responsesMessageEncodingState) appendToolResult(result *llmprotocol
 	if err != nil {
 		return err
 	}
+	itemType := "function_call_output"
+	if _, custom := state.customCalls[result.CallID]; custom || result.Kind == llmprotocol.ToolKindCustom {
+		itemType = "custom_tool_call_output"
+	}
 	state.items = append(state.items, responsesItemWire{
-		Type: "function_call_output", ID: responsesItemID(state.messageID, len(state.items), "function_call_output"),
+		Type: itemType, ID: responsesItemID(state.messageID, len(state.items), itemType),
 		CallID: result.CallID, Output: output,
 	})
 	return nil

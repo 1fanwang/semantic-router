@@ -1,11 +1,14 @@
 package protocolcodec
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // OpenAI custom tools take free-form input instead of JSON arguments. Chat
-// nests the definition and each call under "custom".
+// nests the definition and each call under "custom"; Responses flattens both.
 type customToolFormatWire struct {
 	Type    string                 `json:"type"`
 	Grammar *customToolGrammarWire `json:"grammar,omitempty"`
@@ -14,6 +17,12 @@ type customToolFormatWire struct {
 type customToolGrammarWire struct {
 	Definition string `json:"definition"`
 	Syntax     string `json:"syntax"`
+}
+
+type responsesCustomToolFormatWire struct {
+	Type       string `json:"type"`
+	Definition string `json:"definition,omitempty"`
+	Syntax     string `json:"syntax,omitempty"`
 }
 
 type chatCustomToolWire struct {
@@ -136,4 +145,73 @@ func decodeChatToolCallDelta(wire chatChunkToolCallWire) (llmprotocol.ToolCall, 
 		)
 	}
 	return llmprotocol.ToolCall{ID: wire.ID, Name: wire.Function.Name, Arguments: wire.Function.Arguments}, nil
+}
+
+func decodeResponsesCustomTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+	var tool responsesToolWire
+	if err := decodeWireValue(body, &tool, policy); err != nil {
+		return err
+	}
+	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+		"tools.allowed_callers": tool.AllowedCallers,
+		"tools.defer_loading":   tool.DeferLoading,
+	}); err != nil {
+		return err
+	}
+	format, err := decodeResponsesCustomToolFormat(tool.Format)
+	if err != nil {
+		return err
+	}
+	request.Tools = append(request.Tools, llmprotocol.Tool{
+		Kind: llmprotocol.ToolKindCustom, Name: tool.Name, Description: tool.Description, CustomFormat: format,
+	})
+	return nil
+}
+
+func decodeResponsesCustomToolFormat(wire *responsesCustomToolFormatWire) (*llmprotocol.CustomToolFormat, error) {
+	if wire == nil {
+		return nil, nil
+	}
+	nested := &customToolFormatWire{Type: wire.Type}
+	if wire.Type == "grammar" || wire.Definition != "" || wire.Syntax != "" {
+		nested.Grammar = &customToolGrammarWire{Definition: wire.Definition, Syntax: wire.Syntax}
+	}
+	return decodeCustomToolFormat(nested)
+}
+
+func encodeResponsesCustomTool(tool llmprotocol.Tool) responsesToolWire {
+	wire := responsesToolWire{Type: "custom", Name: tool.Name, Description: tool.Description}
+	if format := tool.CustomFormat; format != nil {
+		wire.Format = &responsesCustomToolFormatWire{Type: "grammar", Definition: format.Definition, Syntax: format.Syntax}
+	}
+	return wire
+}
+
+func decodeResponsesCustomToolCall(item responsesItemWire, index int, policy llmprotocol.Policy) llmprotocol.Message {
+	id := item.CallID
+	if id == "" {
+		id = item.ID
+	}
+	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
+		id = llmprotocol.StableID("responses", fmt.Sprint(index), item.Name, item.Input)
+	}
+	return llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+		Kind: llmprotocol.ContentToolCall,
+		ToolCall: &llmprotocol.ToolCall{
+			Kind: llmprotocol.ToolKindCustom, ID: id, Name: item.Name, Arguments: item.Input,
+		},
+	}}}
+}
+
+func customToolCallIDs(messages []llmprotocol.Message) map[string]struct{} {
+	ids := map[string]struct{}{}
+	for _, message := range messages {
+		for _, content := range message.Content {
+			if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil &&
+				content.ToolCall.Kind == llmprotocol.ToolKindCustom {
+				ids[content.ToolCall.ID] = struct{}{}
+			}
+		}
+	}
+	return ids
 }

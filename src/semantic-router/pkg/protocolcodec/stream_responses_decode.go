@@ -37,6 +37,11 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 			return nil, nil, err
 		}
 		return nil, nil, nil
+	case "response.custom_tool_call_input.done":
+		if err := decoder.validateResponsesCustomToolDone(wire); err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, nil
 	default:
 		if err := decoder.applyUnknownResponsesEvent(&event, frame); err != nil {
 			return nil, nil, err
@@ -66,6 +71,18 @@ func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesE
 	}
 	if string(arguments) != wire.Arguments {
 		return invalidProviderResponse("stream_tool_arguments_mismatch", "Responses function-call done arguments do not match streamed arguments")
+	}
+	decoder.toolArgumentsDone[index] = true
+	return nil
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesCustomToolDone(wire responsesEventWire) error {
+	index := responsesWireOutputIndex(wire)
+	input := decoder.toolArguments[index]
+	if len(input) == 0 {
+		decoder.toolArguments[index] = []byte(wire.Input)
+	} else if string(input) != wire.Input {
+		return invalidProviderResponse("stream_tool_arguments_mismatch", "Responses custom tool done input does not match streamed input")
 	}
 	decoder.toolArgumentsDone[index] = true
 	return nil
@@ -101,6 +118,8 @@ func (decoder *responsesStreamDecoder) applyResponsesItemStart(event *llmprotoco
 	event.Role = llmprotocol.RoleAssistant
 	if item.Type == "function_call" {
 		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
+	} else if item.Type == "custom_tool_call" {
+		event.ToolCall = &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}
 	} else if item.Type == "reasoning" {
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
 	} else if item.Type == "image_generation_call" {
@@ -161,7 +180,7 @@ func (decoder *responsesStreamDecoder) applyResponsesCompletion(event *llmprotoc
 
 func (decoder *responsesStreamDecoder) hasCompletedToolCall() bool {
 	for index, itemType := range decoder.itemTypes {
-		if itemType == "function_call" && decoder.completedItems[index] {
+		if (itemType == "function_call" || itemType == "custom_tool_call") && decoder.completedItems[index] {
 			return true
 		}
 	}
@@ -268,6 +287,8 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 	switch item.Type {
 	case "function_call":
 		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
+	case "custom_tool_call":
+		event.ToolCall = &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}
 	case "message":
 		if decoder.itemKinds[responsesWireOutputIndex(wire)] == llmprotocol.ContentToolCall {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_item_kind_mismatch", "upstream completed a tool item as a message", nil)

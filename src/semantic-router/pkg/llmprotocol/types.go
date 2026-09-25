@@ -122,6 +122,9 @@ type ToolCall struct {
 }
 
 type ToolResult struct {
+	// Kind repeats the call's kind when the source format states it, so a
+	// result whose call lives in retained state keeps its wire type.
+	Kind    ToolKind
 	CallID  string
 	Content []Content
 	IsError *bool

@@ -7,7 +7,7 @@
         "body": {
           "created_at": 100,
           "error": null,
-          "id": "chatcmpl_custom_1",
+          "id": "resp_custom_1",
           "incomplete_details": null,
           "instructions": null,
           "metadata": {},
@@ -16,7 +16,7 @@
           "output": [
             {
               "call_id": "call_1",
-              "id": "item_68f26e3ce4ea5094995aa366",
+              "id": "ctc_1",
               "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
               "name": "apply_patch",
               "type": "custom_tool_call"
@@ -32,7 +32,7 @@
             "input_tokens": 4,
             "input_tokens_details": {
               "cache_write_tokens": null,
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 3,
             "output_tokens_details": {
@@ -40,7 +40,13 @@
             },
             "total_tokens": 7
           }
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
       }
     }
   ]

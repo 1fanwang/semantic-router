@@ -1,0 +1,36 @@
+{
+  "operation": "response",
+  "cases": [
+    {
+      "name": "custom_tool_call",
+      "body": {
+        "id": "resp_custom_1",
+        "object": "response",
+        "created_at": 100,
+        "model": "provider-model",
+        "status": "completed",
+        "output": [
+          {
+            "type": "custom_tool_call",
+            "id": "ctc_1",
+            "status": "completed",
+            "call_id": "call_1",
+            "name": "apply_patch",
+            "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n"
+          }
+        ],
+        "usage": {
+          "input_tokens": 4,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens": 3,
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "total_tokens": 7
+        }
+      }
+    }
+  ]
+}

@@ -34,7 +34,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 }
 
 var responsesItemUnionFields = []string{
-	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "name", "namespace",
+	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
 	"output", "phase", "result", "role", "status", "summary", "type",
 }
 
@@ -76,10 +76,12 @@ func decodeResponsesItemWire(body json.RawMessage, policy llmprotocol.Policy, pr
 
 func isSupportedResponsesItemType(itemType string, providerOutput bool) bool {
 	if providerOutput {
-		return itemType == "message" || itemType == "function_call" || itemType == "reasoning" || itemType == "image_generation_call"
+		return itemType == "message" || itemType == "function_call" || itemType == "custom_tool_call" ||
+			itemType == "reasoning" || itemType == "image_generation_call"
 	}
 	switch itemType {
-	case "message", "function_call", "function_call_output", "reasoning", "item_reference", "image_generation_call":
+	case "message", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output",
+		"reasoning", "item_reference", "image_generation_call":
 		return true
 	default:
 		return false
@@ -127,6 +129,10 @@ func responsesItemAllowedFields(itemType string) []string {
 		return []string{"arguments", "call_id", "caller", "id", "name", "namespace", "status", "type"}
 	case "function_call_output":
 		return []string{"call_id", "caller", "id", "name", "namespace", "output", "status", "type"}
+	case "custom_tool_call":
+		return []string{"call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
+	case "custom_tool_call_output":
+		return []string{"call_id", "caller", "id", "output", "type"}
 	case "reasoning":
 		return []string{"content", "encrypted_content", "id", "status", "summary", "type"}
 	case "item_reference":
@@ -201,6 +207,15 @@ func decodeResponsesInputItemKind(
 			return rejectUnsupportedRequestField("input.function_call_output.name", json.RawMessage(`true`))
 		}
 		return decodeResponsesFunctionResult(item, request, policy)
+	case "custom_tool_call":
+		request.Messages = append(request.Messages, decodeResponsesCustomToolCall(item, index, policy))
+		return nil
+	case "custom_tool_call_output":
+		if err := decodeResponsesFunctionResult(item, request, policy); err != nil {
+			return err
+		}
+		request.Messages[len(request.Messages)-1].Content[0].ToolResult.Kind = llmprotocol.ToolKindCustom
+		return nil
 	case "reasoning":
 		return decodeResponsesReasoningItem(item, request, policy)
 	case "image_generation_call":

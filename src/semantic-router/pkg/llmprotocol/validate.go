@@ -751,7 +751,7 @@ func validateToolCallContent(content Content, limits Limits) error {
 
 func validateToolResultContent(content Content, blocks *int, limits Limits, depth int) error {
 	result := content.ToolResult
-	if result == nil || strings.TrimSpace(result.CallID) == "" {
+	if result == nil || strings.TrimSpace(result.CallID) == "" || result.Kind != "" && result.Kind != ToolKindCustom {
 		return NewError(ErrorInvalidRequest, "invalid_tool_result", "tool result requires a call ID", nil)
 	}
 	if exceeds(result.CallID, limits.IdentifierBytes) {

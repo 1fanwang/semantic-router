@@ -143,6 +143,9 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 		item.Type = "function_call"
 		if event.ToolCall != nil {
 			item.CallID, item.Name, item.Arguments = event.ToolCall.ID, event.ToolCall.Name, event.ToolCall.Arguments
+			if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+				item.Type, item.Arguments, item.Input = "custom_tool_call", "", event.ToolCall.Arguments
+			}
 		}
 	case responsesOutputImage:
 		item.Type = "image_generation_call"
@@ -208,6 +211,9 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolDelta(event llmprotoco
 		ItemID:      encoder.outputIDs[key],
 		OutputIndex: responsesOutputIndex(encoder.outputIndexes[key]),
 		Delta:       event.ToolCall.Arguments,
+	}
+	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+		wire.Type = "response.custom_tool_call_input.delta"
 	}
 	frame, err := encoder.encodeResponsesStreamFrame(wire)
 	if err != nil {
@@ -530,16 +536,20 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 		ItemID: id, OutputIndex: responsesOutputIndex(index),
 		Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
 	}
+	item := responsesItemWire{
+		Type: "function_call", ID: id, Status: "completed",
+		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
+	}
+	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+		done.Type, done.Name, done.Arguments, done.Input = "response.custom_tool_call_input.done", "", "", event.ToolCall.Arguments
+		item.Type, item.Arguments, item.Input = "custom_tool_call", "", event.ToolCall.Arguments
+	}
 	doneFrame, err := encoder.encodeResponsesStreamFrame(done)
 	if err != nil {
 		return nil, nil, err
 	}
 	wire := responsesEventWire{
 		Type: "response.output_item.done", Sequence: encoder.nextWireSequence(), OutputIndex: responsesOutputIndex(index),
-	}
-	item := responsesItemWire{
-		Type: "function_call", ID: id, Status: "completed",
-		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
 	}
 	wire.Item = marshalResponsesEventItem(item)
 	encoder.recordResponsesCompletedOutput(index, wire.Item)

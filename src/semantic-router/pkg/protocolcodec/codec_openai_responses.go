@@ -15,7 +15,8 @@ func (OpenAIResponsesCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityFileInput,
 		llmprotocol.CapabilityImageGeneration,
-		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityReasoning,
+		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools,
+		llmprotocol.CapabilityReasoning,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
@@ -86,25 +87,26 @@ type responsesFormatWire struct {
 }
 
 type responsesToolWire struct {
-	Type              string                     `json:"type"`
-	Name              string                     `json:"name,omitempty"`
-	Description       string                     `json:"description,omitempty"`
-	Parameters        json.RawMessage            `json:"parameters,omitempty"`
-	Strict            *bool                      `json:"strict,omitempty"`
-	AllowedCallers    json.RawMessage            `json:"allowed_callers,omitempty"`
-	DeferLoading      json.RawMessage            `json:"defer_loading,omitempty"`
-	OutputSchema      json.RawMessage            `json:"output_schema,omitempty"`
-	Model             string                     `json:"model,omitempty"`
-	Quality           string                     `json:"quality,omitempty"`
-	Size              string                     `json:"size,omitempty"`
-	OutputFormat      string                     `json:"output_format,omitempty"`
-	OutputCompression *int64                     `json:"output_compression,omitempty"`
-	Moderation        string                     `json:"moderation,omitempty"`
-	Background        string                     `json:"background,omitempty"`
-	InputFidelity     string                     `json:"input_fidelity,omitempty"`
-	InputImageMask    *responsesImageGenMaskWire `json:"input_image_mask,omitempty"`
-	PartialImages     *int64                     `json:"partial_images,omitempty"`
-	Action            string                     `json:"action,omitempty"`
+	Type              string                         `json:"type"`
+	Name              string                         `json:"name,omitempty"`
+	Description       string                         `json:"description,omitempty"`
+	Parameters        json.RawMessage                `json:"parameters,omitempty"`
+	Strict            *bool                          `json:"strict,omitempty"`
+	AllowedCallers    json.RawMessage                `json:"allowed_callers,omitempty"`
+	DeferLoading      json.RawMessage                `json:"defer_loading,omitempty"`
+	OutputSchema      json.RawMessage                `json:"output_schema,omitempty"`
+	Model             string                         `json:"model,omitempty"`
+	Quality           string                         `json:"quality,omitempty"`
+	Size              string                         `json:"size,omitempty"`
+	OutputFormat      string                         `json:"output_format,omitempty"`
+	OutputCompression *int64                         `json:"output_compression,omitempty"`
+	Moderation        string                         `json:"moderation,omitempty"`
+	Background        string                         `json:"background,omitempty"`
+	InputFidelity     string                         `json:"input_fidelity,omitempty"`
+	InputImageMask    *responsesImageGenMaskWire     `json:"input_image_mask,omitempty"`
+	PartialImages     *int64                         `json:"partial_images,omitempty"`
+	Action            string                         `json:"action,omitempty"`
+	Format            *responsesCustomToolFormatWire `json:"format,omitempty"`
 }
 
 type responsesImageGenMaskWire struct {
@@ -123,6 +125,7 @@ type responsesItemWire struct {
 	Caller           json.RawMessage `json:"caller,omitempty"`
 	Namespace        string          `json:"namespace,omitempty"`
 	Arguments        string          `json:"arguments,omitempty"`
+	Input            string          `json:"input,omitempty"`
 	Output           json.RawMessage `json:"output,omitempty"`
 	Summary          json.RawMessage `json:"summary,omitempty"`
 	Phase            json.RawMessage `json:"phase,omitempty"`
@@ -151,6 +154,12 @@ func (wire responsesItemWire) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 		object["arguments"] = arguments
+	case "custom_tool_call":
+		input, err := json.Marshal(wire.Input)
+		if err != nil {
+			return nil, err
+		}
+		object["input"] = input
 	case "reasoning":
 		if len(wire.Summary) == 0 {
 			object["summary"] = json.RawMessage(`[]`)
@@ -333,8 +342,11 @@ func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, pol
 	if toolType == "image_generation" {
 		return decodeResponsesImageGenerationTool(body, request, policy)
 	}
+	if toolType == "custom" {
+		return decodeResponsesCustomTool(body, request, policy)
+	}
 	if toolType != "function" {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function and custom tools enter the model protocol", nil)
 	}
 	return decodeResponsesFunctionTool(body, request, policy)
 }
@@ -401,6 +413,8 @@ func validateResponsesToolVariant(body json.RawMessage, toolType string) error {
 	switch toolType {
 	case "function":
 		names = []string{"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema"}
+	case "custom":
+		names = []string{"name", "description", "format", "allowed_callers", "defer_loading"}
 	case "image_generation":
 		names = []string{
 			"model", "quality", "size", "output_format", "output_compression", "moderation",
@@ -413,7 +427,7 @@ func validateResponsesToolVariant(body json.RawMessage, toolType string) error {
 		allowed[name] = struct{}{}
 	}
 	known := []string{
-		"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema",
+		"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema", "format",
 		"model", "quality", "size", "output_format", "output_compression", "moderation",
 		"background", "input_fidelity", "input_image_mask", "partial_images", "action",
 	}

@@ -1,0 +1,77 @@
+{
+  "operation": "request",
+  "cases": [
+    {
+      "name": "grammar_tool_call_and_output",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "Create hello.txt containing hi"
+              }
+            ]
+          },
+          {
+            "type": "custom_tool_call",
+            "call_id": "call_1",
+            "name": "apply_patch",
+            "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n"
+          },
+          {
+            "type": "custom_tool_call_output",
+            "call_id": "call_1",
+            "output": "Created hello.txt"
+          }
+        ],
+        "tools": [
+          {
+            "type": "custom",
+            "name": "apply_patch",
+            "description": "Edit files with a patch.",
+            "format": {
+              "type": "grammar",
+              "syntax": "lark",
+              "definition": "start: begin_patch hunk end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: /(.|\\n)+/\n%import common.LF"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "text_tool",
+      "body": {
+        "model": "client-model",
+        "input": "Print hello",
+        "tools": [
+          {
+            "type": "custom",
+            "name": "code_exec",
+            "description": "Run Python code.",
+            "format": {
+              "type": "text"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "retained_call_output",
+      "body": {
+        "model": "client-model",
+        "previous_response_id": "resp_previous_1",
+        "input": [
+          {
+            "type": "custom_tool_call_output",
+            "call_id": "call_1",
+            "output": "Created hello.txt"
+          }
+        ]
+      }
+    }
+  ]
+}

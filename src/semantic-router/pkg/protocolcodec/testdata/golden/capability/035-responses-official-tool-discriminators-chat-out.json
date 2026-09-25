@@ -71,10 +71,32 @@
     {
       "name": "custom",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_tool"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "Use the selected tool.",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "custom": {
+                "description": "Run Python code.",
+                "format": {
+                  "grammar": {
+                    "definition": "print\\(.+\\)",
+                    "syntax": "regex"
+                  },
+                  "type": "grammar"
+                },
+                "name": "code_exec"
+              },
+              "type": "custom"
+            }
+          ]
         }
       }
     },
