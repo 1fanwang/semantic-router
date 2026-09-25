@@ -112,6 +112,17 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+For an Anthropic Messages client using a Chat Completions or Responses backend,
+`thinking.type: adaptive` uses the backend model's default reasoning behavior;
+`output_config.effort` is retained. `thinking.display: omitted` removes reasoning
+from the translated response, including streaming output. Explicit
+`thinking.type: disabled` requires a configured reasoning family and an
+effective backend reasoning-off control. Unsupported controls fail with a typed
+request error. A `context_management` edit of `clear_thinking_20251015` with
+`keep: all` has no effect and is omitted for these backends; edits that would
+change history are rejected. Responses backends still reject Anthropic
+`cache_control` directives because the Responses codec cannot preserve them.
+
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
 retained history, removes Router-owned object controls, and then encodes the

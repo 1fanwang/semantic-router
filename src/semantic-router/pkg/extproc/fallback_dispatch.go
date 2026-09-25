@@ -393,7 +393,11 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, *reqCopy, ctx.ProtocolEnvelope)
+	projected, projectionErr := r.projectAnthropicRequestForBackend(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
+	if projectionErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
+	}
+	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
 	}
@@ -467,14 +471,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, evalResult, engineErr
 	}
 
-	var mutation protocolcodec.ResponseMutation
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		mutation = func(response *llmprotocol.Response) error {
-			response.ID = responseID
-			return nil
-		}
-	}
-
+	mutation := clientResponseMutation(ctx, dispatch.targetFormat)
 	translated, translateErr := responseEngine.TranslateResponse(dispatch.targetFormat, ctx.SourceFormat, resBody, mutation)
 	if translateErr != nil {
 		attemptOutcome.Error = translateErr

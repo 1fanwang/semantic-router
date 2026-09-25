@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -318,9 +319,12 @@ func (engine *Engine) NewStream(source, target llmprotocol.WireFormat, context l
 }
 
 // StreamEventMutation applies request-scoped policy to decoded neutral events
-// before they reach a public wire encoder. It cannot observe provider bytes or
-// HTTP headers and therefore keeps protocol translation provider-neutral.
+// before they reach a public wire encoder. Returning ErrOmitStreamEvent removes
+// an event from public output and from the accepted semantic event stream.
+// It cannot observe provider bytes or HTTP headers.
 type StreamEventMutation func(*llmprotocol.Event) error
+
+var ErrOmitStreamEvent = errors.New("omit neutral stream event")
 
 func (engine *Engine) NewStreamWithMutation(
 	source,
@@ -590,7 +594,9 @@ func (engine *StreamEngine) encodeEvents(
 	frames := make([][]byte, 0, len(events))
 	accepted := make([]llmprotocol.Event, 0, len(events))
 	for index := range events {
-		if err := engine.prepareEvent(&events[index]); err != nil {
+		if err := engine.prepareEvent(&events[index]); errors.Is(err, ErrOmitStreamEvent) {
+			continue
+		} else if err != nil {
 			return frames, accepted, diagnostics, err
 		}
 		encoded, eventDiagnostics, err := engine.encoder.Push(events[index])

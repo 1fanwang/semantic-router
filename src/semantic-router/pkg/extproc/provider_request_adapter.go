@@ -15,8 +15,13 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	ctx *RequestContext,
 ) ([]byte, error) {
 	body, mutation, err := r.projectProviderRequest(body, dispatch, ctx)
+	if err == nil && explicitAnthropicReasoningDisabled(ctx, dispatch) &&
+		(mutation == nil || !mutation.reasoningApplied) {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			"the selected backend has no effective reasoning-off control", nil)
+	}
 	if err == nil && mutation != nil {
-		r.observeReasoningMutation(mutation, dispatch.useReasoning)
+		r.observeReasoningMutation(mutation, dispatch.useReasoning && !explicitAnthropicReasoningDisabled(ctx, dispatch))
 	}
 	return body, err
 }
@@ -28,10 +33,14 @@ func (r *OpenAIRouter) projectProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) ([]byte, *reasoningRequestMutation, error) {
-	if dispatch == nil || ctx == nil || dispatch.decisionName == "" {
+	if dispatch == nil || ctx == nil {
 		return body, nil, nil
 	}
-	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+	explicitDisable := explicitAnthropicReasoningDisabled(ctx, dispatch)
+	if dispatch.decisionName == "" && !explicitDisable {
+		return body, nil, nil
+	}
+	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 && !explicitDisable {
 		family := r.getModelReasoningFamily(dispatch.logicalModel)
 		transport := resolveProviderReasoningTransport(dispatch.profile)
 		if dispatch.targetFormat != llmprotocol.OpenAIResponsesV1 || family == nil ||
@@ -42,7 +51,7 @@ func (r *OpenAIRouter) projectProviderRequest(
 	return r.projectReasoningRequest(
 		body,
 		dispatch.logicalModel,
-		dispatch.useReasoning,
+		dispatch.useReasoning && !explicitDisable,
 		ctx.decisionForCandidate(dispatch.logicalModel),
 		dispatch.profile,
 	)
