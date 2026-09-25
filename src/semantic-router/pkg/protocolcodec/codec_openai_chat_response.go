@@ -42,10 +42,12 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// A same-format encode may replay the response byte-for-byte. OpenRouter's
 	// provider, native finish reason and accounting decorations were dropped
 	// from the neutral response, so render it again instead of leaking them.
-	if wire.hasOpenRouterDecorations() {
+	needsReencode := wire.hasOpenRouterDecorations()
+	if needsReencode {
 		canonicalBody = nil
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
+	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
 }
 

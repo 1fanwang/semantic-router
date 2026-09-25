@@ -101,6 +101,13 @@ func runResponseDecorationMatrix(
 
 func assertAnthropicResponseDiagnostics(client protocolCodecE2EClient, streamed bool, result protocolMatrixHTTPResult) error {
 	if streamed {
+		if client.path == "/v1/messages" {
+			if !strings.Contains(string(result.Body), `"diagnostics":`) ||
+				!strings.Contains(string(result.Body), `"tools_changed"`) {
+				return fmt.Errorf("native Messages stream lost cache diagnostics: %s", truncateString(string(result.Body), 600))
+			}
+			return nil
+		}
 		return rejectDecoratedStreamFields(result.Body, "diagnostics")
 	}
 	var body map[string]json.RawMessage

@@ -41,11 +41,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	}
 	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
-	// The codec deliberately withholds same-format replay when a Chat provider
-	// response contains decorations that it drops from the neutral result.
-	// Forwarding the original bytes here would undo that boundary decision.
+	// Same-format Chat usually forwards upstream bytes. When codec translation
+	// changed those bytes (for example, by dropping provider decorations), send
+	// the translated response instead.
 	rewriteClientBody := requiresClientResponseRewrite(ctx) ||
-		ctx.SourceFormat == llmprotocol.OpenAIChatV1 && len(ctx.ResponseEnvelope.Response) == 0
+		ctx.SourceFormat == llmprotocol.OpenAIChatV1 && ctx.ResponseBodyNeedsRewrite
 	if rewriteClientBody {
 		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
 		if err != nil {
