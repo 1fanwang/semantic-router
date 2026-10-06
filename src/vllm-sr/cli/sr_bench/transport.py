@@ -444,15 +444,7 @@ def chat(
             if obj.get("usage"):
                 raw_usage = obj["usage"]
                 usage = normalize_usage(raw_usage)
-                chunk_cache_read_reported, chunk_cache_write_reported = usage_presence(
-                    raw_usage
-                )
-                cache_read_reported = (
-                    cache_read_reported is True or chunk_cache_read_reported
-                )
-                cache_write_reported = (
-                    cache_write_reported is True or chunk_cache_write_reported
-                )
+                cache_read_reported, cache_write_reported = usage_presence(raw_usage)
             for choice in obj.get("choices", []):
                 if choice.get("index", 0) != 0:
                     continue

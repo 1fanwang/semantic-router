@@ -7,6 +7,8 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
 
 import pytest
 import requests
@@ -204,25 +206,61 @@ def test_live_http_usage_final_channel_and_idempotency(
     assert store.calls(run["id"])[0]["reasoning"] == "The answer might be B."
 
 
-def test_streaming_cache_presence_accumulates_across_usage_events(tmp_path, target):
-    target.usage_events = [
-        {
-            "prompt_tokens": 10,
-            "completion_tokens": 3,
-            "prompt_tokens_details": {
-                "cached_tokens": 2,
-                "cache_creation_tokens": 1,
+_CACHED_USAGE: dict[str, Any] = {
+    "prompt_tokens": 10,
+    "completion_tokens": 3,
+    "prompt_tokens_details": {"cached_tokens": 2, "cache_creation_tokens": 1},
+}
+_PLAIN_USAGE: dict[str, Any] = {"prompt_tokens": 10, "completion_tokens": 3}
+
+
+@pytest.mark.parametrize(
+    ("usage_events", "reported", "usage", "ratio"),
+    [
+        (
+            [_CACHED_USAGE, _PLAIN_USAGE],
+            False,
+            {
+                "input_tokens": 10,
+                "cached_input_tokens": 0,
+                "cache_write_tokens": 0,
+                "output_tokens": 3,
             },
-        },
-        {"prompt_tokens": 10, "completion_tokens": 3},
-    ]
+            None,
+        ),
+        (
+            [_PLAIN_USAGE, _CACHED_USAGE],
+            True,
+            {
+                "input_tokens": 7,
+                "cached_input_tokens": 2,
+                "cache_write_tokens": 1,
+                "output_tokens": 3,
+            },
+            0.2,
+        ),
+    ],
+)
+def test_streaming_cache_presence_matches_the_final_usage_event(
+    tmp_path: Path,
+    target: ThreadingHTTPServer,
+    usage_events: list[dict[str, Any]],
+    reported: bool,
+    usage: dict[str, int],
+    ratio: float | None,
+) -> None:
+    target.usage_events = usage_events
     store = Store(tmp_path)
     run = Engine(store).start(manifest(target))
 
     assert wait_run(store, run["id"])["status"] == "completed"
     call = store.calls(run["id"])[0]
-    assert call["cache_read_reported"] is True
-    assert call["cache_write_reported"] is True
+    assert call["cache_read_reported"] is reported
+    assert call["cache_write_reported"] is reported
+    assert call["usage"] == usage
+    score = make_report(store, run["id"])["summary"]["targets"][0]
+    assert score["cache_read_call_count"] == int(reported)
+    assert score["cache_read_ratio"] == ratio
 
 
 def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):

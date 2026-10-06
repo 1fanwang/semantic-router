@@ -51,8 +51,9 @@ latest messages because that header was absent. An unsupported nonempty Router
 phase is stored as `unknown` with `phase_source: "router"`.
 `model_switches_by_phase` counts a switch under the phase of the later request.
 Provider cache fields retain their presence separately from their numeric values:
-`cache_read_reported` and `cache_write_reported` are true only when the provider
-sent the corresponding field, including an explicit zero. The target and
+`cache_read_reported` and `cache_write_reported` are true only when the final
+usage event, the one the call's usage comes from, carried the corresponding
+field, including an explicit zero. The target and
 benchmark metrics expose `cache_read_ratio` and `cache_read_call_count`; only
 subject calls with `cache_read_reported=true` are included, so missing cache
 usage stays unknown instead of becoming a zero-hit observation. Older stored
