@@ -1629,6 +1629,52 @@ Semantic Router: Set Gateway API Key** when the listener has `api_keys`, and
 set `vllm-sr.maxInputTokens` as the next section describes. Each VS Code window
 sends one `x-session-id`, and no `x-conversation-id`.
 
+## GitHub Copilot CLI
+
+The [vSR plugin for Copilot CLI](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/copilot-cli)
+puts the decision model beside GitHub Copilot CLI's shell tool: guard holds a
+command that looks destructive, redact hides personal data in a command's
+output before Copilot reads it, and shield tells Copilot to treat an output
+that tries to give it orders as data. It does not change which model Copilot
+CLI uses, and `vllm-sr connect` does not set it up, so install it and point it
+at a decision model by hand. It needs Copilot CLI 1.0.114 or later and Python 3:
+
+```bash
+copilot plugin marketplace add vllm-project/semantic-router
+copilot plugin install vsr-copilot@vllm-sr
+```
+
+The plugin reads `vsr.json` in the Copilot home (`$COPILOT_HOME`, by default
+`~/.copilot`). Publish a System One model on the listener as
+[With the vSR plugin](#with-the-vsr-plugin) describes, then give the plugin its
+address:
+
+```json
+{
+  "runtimeUrl": "http://localhost:8899/v1/decisions",
+  "runtimeModel": "vela3-lite",
+  "runtimeTokenEnv": "VLLM_SR_API_KEY",
+  "timeoutSeconds": 12
+}
+```
+
+`runtimeTokenEnv` names the variable that holds the listener's API key; leave
+it out when the listener has no `api_keys`. The listener's `systemone.vsr`
+settings and rules reach this plugin too, and the plugin's README lists every
+setting.
+
+- **Time to answer.** `timeoutSeconds` is how long the plugin waits for the
+  decision model before it lets a call through unchecked, 3 seconds by default.
+  A decision call takes about 4 seconds on a laptop CPU, so raise it, and keep
+  it under the 15 seconds the plugin gives its guard hook.
+- **Shell output only.** The plugin reads Copilot's shell tool, and the first
+  16,000 characters of an output. Copilot's own file viewer, `view`, reached the
+  model with personal data unhidden in the measured run, so a file read that
+  way is not covered.
+
+These settings were checked with Copilot CLI 1.0.114 against a `vllm-srun`
+decision model. The listener path was checked only against a mocked listener.
+
 ## Set budgets before running a task
 
 `GET /v1/models` discovers virtual names and routing metadata; it does not
